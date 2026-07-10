@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import QRCode from "qrcode";
 import AuthGuard from "@/components/AuthGuard";
 import NavBar from "@/components/NavBar";
 import { apiFetch } from "@/lib/api";
@@ -14,6 +15,7 @@ interface StudentDetail {
   course: string | null;
   status: StudentStatus;
   tags: string[];
+  qr_token: string | null;
   guardians: {
     id: string;
     name: string | null;
@@ -35,6 +37,7 @@ function StudentDetailView() {
   const [student, setStudent] = useState<StudentDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [invite, setInvite] = useState<InviteCodeResult | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -48,6 +51,14 @@ function StudentDetailView() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!student?.qr_token) {
+      setQrDataUrl(null);
+      return;
+    }
+    QRCode.toDataURL(student.qr_token, { width: 200 }).then(setQrDataUrl);
+  }, [student?.qr_token]);
 
   async function updateStatus(status: StudentStatus) {
     if (!student) return;
@@ -71,6 +82,19 @@ function StudentDetailView() {
       method: "POST",
     });
     setInvite(res);
+  }
+
+  async function regenerateQr() {
+    if (!student) return;
+    if (
+      student.qr_token &&
+      !confirm("QRコードを再発行すると、これまで印刷したQRカードは使えなくなります。よろしいですか?")
+    )
+      return;
+    const res = await apiFetch<{ qr_token: string }>(`/api/students/${student.id}/qr-token`, {
+      method: "POST",
+    });
+    setStudent({ ...student, qr_token: res.qr_token });
   }
 
   if (error) return <main className="p-6 text-red-600">{error}</main>;
@@ -132,6 +156,25 @@ function StudentDetailView() {
             </p>
           </div>
         )}
+      </section>
+
+      <section className="mb-6">
+        <h2 className="mb-2 font-semibold">入退室QRコード</h2>
+        {qrDataUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={qrDataUrl} alt="入退室QRコード" width={160} height={160} />
+        ) : (
+          <p className="text-sm text-gray-500">QRコードがまだ発行されていません。</p>
+        )}
+        <button
+          onClick={regenerateQr}
+          className="mt-2 rounded border px-3 py-1.5 text-sm hover:bg-gray-50"
+        >
+          {student.qr_token ? "QRコードを再発行する" : "QRコードを発行する"}
+        </button>
+        <p className="mt-1 text-sm text-gray-500">
+          印刷してカードにし、教室のQRリーダー画面(<code>/kiosk</code>)で読み取ってもらってください。
+        </p>
       </section>
 
       <button onClick={handleDelete} className="text-sm text-red-600 hover:underline">

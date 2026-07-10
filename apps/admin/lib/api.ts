@@ -1,5 +1,5 @@
 const API_KEY_STORAGE = "school-harness-api-key";
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8787";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8787";
 
 export function getApiKey(): string | null {
   if (typeof window === "undefined") return null;

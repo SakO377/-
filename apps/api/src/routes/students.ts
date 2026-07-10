@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env, Variables } from "../types";
 import { requireAuth } from "../middleware/auth";
-import { generateId, generateInviteCode } from "../lib/id";
+import { generateId, generateInviteCode, generateQrToken } from "../lib/id";
 import { parseJsonArray, parseJsonObject } from "../lib/json";
 
 const students = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -42,8 +42,10 @@ students.get("/", async (c) => {
     params.push(classId);
   }
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  // qr_token は入退室QRの秘密情報なので一覧では返さない
   const { results } = await c.env.DB.prepare(
-    `SELECT * FROM students ${where} ORDER BY created_at DESC`
+    `SELECT id, name, grade, course, class_id, status, tags, metadata, created_at
+     FROM students ${where} ORDER BY created_at DESC`
   )
     .bind(...params)
     .all();
@@ -53,9 +55,10 @@ students.get("/", async (c) => {
 students.post("/", zValidator("json", studentInput), async (c) => {
   const body = c.req.valid("json");
   const id = generateId("student");
+  const qrToken = generateQrToken();
   await c.env.DB.prepare(
-    `INSERT INTO students (id, name, grade, course, class_id, status, tags, metadata)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO students (id, name, grade, course, class_id, status, tags, metadata, qr_token)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
@@ -65,7 +68,8 @@ students.post("/", zValidator("json", studentInput), async (c) => {
       body.class_id ?? null,
       body.status ?? "在籍",
       JSON.stringify(body.tags ?? []),
-      JSON.stringify(body.metadata ?? {})
+      JSON.stringify(body.metadata ?? {}),
+      qrToken
     )
     .run();
   const row = await c.env.DB.prepare("SELECT * FROM students WHERE id = ?").bind(id).first();
@@ -189,6 +193,17 @@ students.post("/:id/invite-codes", async (c) => {
     .run();
 
   return c.json({ code, expires_at: expiresAt }, 201);
+});
+
+// 入退室QRの再発行(印刷物の紛失時など)
+students.post("/:id/qr-token", async (c) => {
+  const id = c.req.param("id");
+  const existing = await c.env.DB.prepare("SELECT id FROM students WHERE id = ?").bind(id).first();
+  if (!existing) return c.json({ error: "Not found" }, 404);
+
+  const qrToken = generateQrToken();
+  await c.env.DB.prepare("UPDATE students SET qr_token = ? WHERE id = ?").bind(qrToken, id).run();
+  return c.json({ qr_token: qrToken });
 });
 
 export default students;

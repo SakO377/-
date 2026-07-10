@@ -5,8 +5,11 @@ import students from "./routes/students";
 import guardians from "./routes/guardians";
 import classes from "./routes/classes";
 import absences from "./routes/absences";
+import attendance from "./routes/attendance";
+import settings from "./routes/settings";
 import lineWebhook from "./routes/line-webhook";
 import liff from "./routes/liff";
+import kiosk from "./routes/kiosk";
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -31,11 +34,16 @@ app.route("/api/students", students);
 app.route("/api/guardians", guardians);
 app.route("/api/classes", classes);
 app.route("/api/absences", absences);
+app.route("/api/attendance", attendance);
+app.route("/api/settings", settings);
 
 // LINE Messaging API Webhook(署名検証あり、APIキー不要)
 app.route("/line", lineWebhook);
 
 // 保護者向けLIFF API(LINE IDトークンで認証、APIキー不要)
 app.route("/liff", liff);
+
+// 教室のタブレット/PC向けQRチェックイン(物理的な所持が認証代わり、APIキー不要)
+app.route("/kiosk", kiosk);
 
 export default app;
