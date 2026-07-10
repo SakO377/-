@@ -7,6 +7,9 @@ import classes from "./routes/classes";
 import absences from "./routes/absences";
 import attendance from "./routes/attendance";
 import settings from "./routes/settings";
+import reportTemplates from "./routes/report-templates";
+import reports from "./routes/reports";
+import announcements, { sendAnnouncementNow } from "./routes/announcements";
 import lineWebhook from "./routes/line-webhook";
 import liff from "./routes/liff";
 import kiosk from "./routes/kiosk";
@@ -36,6 +39,9 @@ app.route("/api/classes", classes);
 app.route("/api/absences", absences);
 app.route("/api/attendance", attendance);
 app.route("/api/settings", settings);
+app.route("/api/report-templates", reportTemplates);
+app.route("/api/reports", reports);
+app.route("/api/announcements", announcements);
 
 // LINE Messaging API Webhook(署名検証あり、APIキー不要)
 app.route("/line", lineWebhook);
@@ -46,4 +52,19 @@ app.route("/liff", liff);
 // 教室のタブレット/PC向けQRチェックイン(物理的な所持が認証代わり、APIキー不要)
 app.route("/kiosk", kiosk);
 
-export default app;
+async function scheduled(_event: ScheduledController, env: Env): Promise<void> {
+  // 予約配信(scheduled_at到達済み・未送信)のお知らせを送信する
+  const { results } = await env.DB.prepare(
+    `SELECT * FROM announcements
+     WHERE sent_at IS NULL AND scheduled_at IS NOT NULL AND scheduled_at <= datetime('now')`
+  ).all<{ id: string; title: string; body: string; segment: string; sent_at: string | null }>();
+
+  for (const row of results ?? []) {
+    await sendAnnouncementNow(env, row);
+  }
+}
+
+export default {
+  fetch: app.fetch,
+  scheduled,
+};

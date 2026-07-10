@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { Env } from "../types";
 import { verifyLineIdToken, type VerifiedLineUser } from "../lib/line";
 import { generateId } from "../lib/id";
+import { parseJsonArray, parseJsonObject } from "../lib/json";
 
 const liff = new Hono<{ Bindings: Env }>();
 
@@ -186,6 +187,107 @@ liff.post("/absences/:id/confirm", async (c) => {
   await c.env.DB.prepare("UPDATE absence_requests SET status = '確定' WHERE id = ?").bind(id).run();
   const row = await c.env.DB.prepare("SELECT * FROM absence_requests WHERE id = ?").bind(id).first();
   return c.json(row);
+});
+
+// 保護者自身と紐付けられた生徒宛の送信済み指導報告書一覧
+liff.get("/reports", async (c) => {
+  const guardian = await requireGuardian(c);
+  if (!guardian) return c.json({ error: "認証に失敗しました" }, 401);
+
+  const { results } = await c.env.DB.prepare(
+    `SELECT r.*, s.name AS student_name FROM reports r
+     JOIN students s ON s.id = r.student_id
+     JOIN student_guardians sg ON sg.student_id = r.student_id
+     WHERE sg.guardian_id = ? AND r.sent_at IS NOT NULL
+     ORDER BY r.sent_at DESC`
+  )
+    .bind(guardian.id)
+    .all();
+
+  return c.json({ reports: results ?? [] });
+});
+
+liff.post("/reports/:id/read", async (c) => {
+  const guardian = await requireGuardian(c);
+  if (!guardian) return c.json({ error: "認証に失敗しました" }, 401);
+
+  const id = c.req.param("id");
+  const report = await c.env.DB.prepare(
+    `SELECT r.id FROM reports r
+     JOIN student_guardians sg ON sg.student_id = r.student_id
+     WHERE r.id = ? AND sg.guardian_id = ?`
+  )
+    .bind(id, guardian.id)
+    .first();
+  if (!report) return c.json({ error: "Not found" }, 404);
+
+  await c.env.DB.prepare("UPDATE reports SET read_at = COALESCE(read_at, datetime('now')) WHERE id = ?")
+    .bind(id)
+    .run();
+  return c.json({ read: true });
+});
+
+// 保護者自身と紐付けられた生徒が対象に含まれるお知らせ一覧(セグメント一致で判定)
+liff.get("/announcements", async (c) => {
+  const guardian = await requireGuardian(c);
+  if (!guardian) return c.json({ error: "認証に失敗しました" }, 401);
+
+  const { results: studentRows } = await c.env.DB.prepare(
+    `SELECT s.class_id, s.tags FROM students s
+     JOIN student_guardians sg ON sg.student_id = s.id
+     WHERE sg.guardian_id = ?`
+  )
+    .bind(guardian.id)
+    .all<{ class_id: string | null; tags: string | null }>();
+
+  const classIds = new Set((studentRows ?? []).map((s) => s.class_id).filter((v): v is string => !!v));
+  const tags = new Set<string>();
+  (studentRows ?? []).forEach((s) => {
+    parseJsonArray(s.tags).forEach((t) => tags.add(String(t)));
+  });
+
+  const { results: announcementRows } = await c.env.DB.prepare(
+    `SELECT a.*, ar.read_at FROM announcements a
+     LEFT JOIN announcement_reads ar ON ar.announcement_id = a.id AND ar.guardian_id = ?
+     WHERE a.sent_at IS NOT NULL
+     ORDER BY a.sent_at DESC LIMIT 100`
+  )
+    .bind(guardian.id)
+    .all<Record<string, unknown>>();
+
+  const matched = (announcementRows ?? []).filter((row) => {
+    const segment = parseJsonObject(row.segment as string) as {
+      type: string;
+      class_id?: string;
+      tag?: string;
+    };
+    if (segment.type === "all") return true;
+    if (segment.type === "class") return segment.class_id ? classIds.has(segment.class_id) : false;
+    if (segment.type === "tag") return segment.tag ? tags.has(segment.tag) : false;
+    return false;
+  });
+
+  return c.json({
+    announcements: matched.map((row) => ({
+      id: row.id,
+      title: row.title,
+      body: row.body,
+      sent_at: row.sent_at,
+      read_at: row.read_at ?? null,
+    })),
+  });
+});
+
+liff.post("/announcements/:id/read", async (c) => {
+  const guardian = await requireGuardian(c);
+  if (!guardian) return c.json({ error: "認証に失敗しました" }, 401);
+  const id = c.req.param("id");
+  await c.env.DB.prepare(
+    "INSERT OR IGNORE INTO announcement_reads (announcement_id, guardian_id) VALUES (?, ?)"
+  )
+    .bind(id, guardian.id)
+    .run();
+  return c.json({ read: true });
 });
 
 export default liff;

@@ -20,3 +20,7 @@ LIFF_CHANNEL_ID = "REPLACE_WITH_YOUR_LINE_LOGIN_CHANNEL_ID"
 
 # LINE_CHANNEL_ACCESS_TOKEN / LINE_CHANNEL_SECRET はローカルでは
 # .dev.vars に、本番では `wrangler secret put` で設定してください(平文で書かない)。
+
+# お知らせの予約配信(scheduled_at到達分)を5分おきにチェックして送信する
+[triggers]
+crons = ["*/5 * * * *"]
