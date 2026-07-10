@@ -9,6 +9,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "setup": "node scripts/setup.mjs",
     "dev:api": "pnpm --filter @school-harness/api dev",
     "dev:admin": "pnpm --filter @school-harness/admin dev",
     "dev:liff": "pnpm --filter @school-harness/liff dev",
