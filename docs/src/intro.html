@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>School Harness 導入のご案内(教室運営者向け)</title>
+<style>
+  :root {
+    --brand: #16325c;
+    --accent: #1a7f5a;
+    --brand-light: #eef2f8;
+    --accent-light: #e8f5f0;
+    --ink: #1a1a1a;
+    --muted: #666;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans CJK JP", "Noto Sans JP", "Hiragino Sans", sans-serif;
+    color: var(--ink);
+    font-size: 10.5pt;
+    line-height: 1.75;
+  }
+  .page { padding: 0 8mm; }
+  .cover {
+    background: linear-gradient(135deg, var(--brand) 0%, #1f4b8a 100%);
+    color: #fff;
+    padding: 16mm 10mm 12mm;
+    border-radius: 0 0 6px 6px;
+    margin-bottom: 8mm;
+  }
+  .cover .tag { font-size: 9pt; opacity: 0.85; letter-spacing: 0.1em; }
+  .cover h1 { font-size: 22pt; margin: 2mm 0 2mm; font-weight: 700; }
+  .cover .lead { font-size: 11.5pt; opacity: 0.95; }
+  .cover .zero { font-size: 15pt; font-weight: 700; margin-top: 3mm; }
+  .cover .zero span { background: var(--accent); padding: 1mm 3mm; border-radius: 4px; }
+  h2 {
+    font-size: 13.5pt;
+    color: var(--brand);
+    border-left: 5px solid var(--brand);
+    padding-left: 3mm;
+    margin: 8mm 0 3mm;
+    break-after: avoid;
+  }
+  h3 { font-size: 11pt; margin: 4mm 0 1.5mm; break-after: avoid; color: var(--brand); }
+  p { margin-bottom: 2mm; }
+  table { width: 100%; border-collapse: collapse; margin: 3mm 0; }
+  th, td { border: 1px solid #ccc; padding: 2mm 3mm; text-align: left; vertical-align: top; }
+  th { background: var(--brand-light); font-weight: 700; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; margin: 3mm 0; }
+  .card {
+    border: 1px solid #d8dee8;
+    border-top: 3px solid var(--accent);
+    border-radius: 4px;
+    padding: 3.5mm 4mm;
+    break-inside: avoid;
+  }
+  .card b { display: block; color: var(--brand); margin-bottom: 1mm; font-size: 10.5pt; }
+  .card p { font-size: 9.5pt; margin: 0; }
+  .note {
+    background: var(--accent-light);
+    border-radius: 4px;
+    padding: 3mm 4mm;
+    margin: 3mm 0;
+    break-inside: avoid;
+  }
+  .note b { color: var(--accent); }
+  .warn {
+    background: #fdf6ec;
+    border-radius: 4px;
+    padding: 3mm 4mm;
+    margin: 3mm 0;
+    break-inside: avoid;
+    font-size: 9.5pt;
+  }
+  .warn b { color: #a4700f; }
+  ul { padding-left: 5mm; margin-bottom: 2mm; }
+  li { margin-bottom: 1mm; }
+  .price { text-align: center; }
+  .price .big { font-size: 16pt; font-weight: 700; color: var(--accent); }
+  .footer {
+    margin-top: 10mm;
+    padding-top: 3mm;
+    border-top: 1px solid #ddd;
+    color: var(--muted);
+    font-size: 8.5pt;
+  }
+  .pagebreak { break-before: page; }
+  .steps { counter-reset: s; }
+  .steps li {
+    list-style: none;
+    counter-increment: s;
+    margin-bottom: 2mm;
+    padding-left: 9mm;
+    position: relative;
+  }
+  .steps li::before {
+    content: counter(s);
+    position: absolute;
+    left: 0; top: 0.8mm;
+    width: 6.5mm; height: 6.5mm;
+    background: var(--brand);
+    color: #fff;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 6.5mm;
+    font-size: 9.5pt;
+    font-weight: 700;
+  }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="tag">SCHOOL HARNESS — 塾・習い事教室向け オープンソース運営管理システム</div>
+  <h1>教室運営のDXを、月額0円で。</h1>
+  <p class="lead">生徒管理・入退室・欠席振替・指導報告・お知らせ配信・月謝請求。有料SaaSの中核機能を、オープンソースで。保護者との連絡はすべてLINEで完結します。</p>
+  <p class="zero"><span>利用料 永久0円</span>&nbsp; ライセンス費・月額費・生徒数課金、すべてありません</p>
+</div>
+
+<div class="page">
+
+<h2>こんなお悩みはありませんか?</h2>
+<ul>
+  <li>欠席連絡の<b>電話対応</b>に授業前の貴重な時間を取られている</li>
+  <li>お知らせのプリントが保護者に届かない・読まれたか分からない</li>
+  <li>月謝の請求書づくりと入金チェックが毎月の負担になっている</li>
+  <li>管理システムを入れたいが、<b>月2〜3万円の固定費</b>は小規模教室には重い</li>
+  <li>子どもの個人情報を外部のサービスに預けることに不安がある</li>
+</ul>
+<p>School Harness は、これらをまとめて解決するために作られた、塾・ピアノ・英会話・スイミング・ダンス・そろばん等の<b>あらゆる習い事教室のための運営管理システム</b>です。</p>
+
+<h2>主な機能(6つ)</h2>
+<div class="grid">
+  <div class="card"><b>① 生徒・保護者管理</b><p>生徒の登録、コース・クラス・タグ管理。招待コードで保護者のLINEと安全に紐付け。きょうだい(1保護者に複数生徒)にも対応。</p></div>
+  <div class="card"><b>② 入退室管理</b><p>生徒別QRカードを教室のタブレット等で読み取るだけ。専用機器の購入は不要。保護者へLINE通知、履歴のCSV出力も。</p></div>
+  <div class="card"><b>③ 欠席・振替連絡</b><p>保護者はLINE内フォームから連絡、電話は不要に。教室は一覧で確認し、振替候補日を提案→保護者がワンタップで確定。</p></div>
+  <div class="card"><b>④ 指導報告書</b><p>テンプレートを選んで入力し、LINEで送信。既読管理付きで「読まれたか」が分かる。教科・単元の事前登録で入力を時短。</p></div>
+  <div class="card"><b>⑤ お知らせ一斉配信</b><p>全体・クラス別・タグ別のセグメント配信と予約配信。既読・未読も把握でき、「プリントが届かない」問題を解消。</p></div>
+  <div class="card"><b>⑥ 月謝・請求管理</b><p>生徒ごとの月謝設定、きょうだい割引等の内訳調整、請求書の発行(印刷・PDF)とLINEでの案内、入金の消込管理。</p></div>
+</div>
+
+<h2>選ばれる7つの理由</h2>
+<h3>1. 利用料が永久に0円(オープンソース)</h3>
+<p>MITライセンスで公開されるオープンソースソフトウェアです。ライセンス費・月額費・生徒数課金は一切なく、動作に使うCloudflareとLINE公式アカウントも無料枠で運用できる設計です。有料SaaS(相場:月2〜3万円+オプション課金)と比べ、<b>年間で数十万円の固定費削減</b>になります。</p>
+<h3>2. 保護者はLINEだけ。アプリ不要</h3>
+<p>保護者に新しいアプリをインストールさせる必要はありません。ふだん使っているLINEに通知が届き、LINE内の画面で欠席連絡から請求書確認まで完結します。<b>導入の最大の壁である「保護者に使ってもらえない」が起きにくい</b>設計です。</p>
+
+<div class="pagebreak"></div>
+
+<h3>3. データは自分の管理下に(子どもの個人情報を外部に預けない)</h3>
+<p>セルフホスト型のため、生徒・保護者の情報は<b>教室自身のCloudflareアカウント内のデータベース</b>にのみ保存されます。運営会社のサーバーに子どもの情報を預ける構造そのものがありません。CSVエクスポートとバックアップ手順も用意されています。</p>
+<h3>4. LINEの無料枠内で運用できる「配信数の見える化」</h3>
+<p>LINE公式アカウントの無料メッセージ枠(月200通)を超えないよう、<b>当月の配信数と残量を管理画面に常時表示</b>。通知は機能ごとにON/OFFでき、OFFでも保護者はLINE内の履歴画面でいつでも確認可能(この方式は無料枠を消費しません)。無料枠を超えそうな配信は自動で停止する安全装置付きです。</p>
+<h3>5. 専用機器のいらない入退室管理</h3>
+<p>手持ちのタブレットやパソコンと、市販のQRリーダー(またはカメラ)だけで入退室管理を始められます。カード紛失時はワンクリックで再発行でき、古いカードは自動的に無効になります。</p>
+<h3>6. AI・自動化に対応した「APIファースト」設計</h3>
+<p>全機能がREST APIとして公開されており、Claude CodeなどのAIツールから「今月の欠席者を一覧にして」のように<b>自然言語で操作・集計</b>できます。将来の拡張や他システム連携も容易です。</p>
+<h3>7. プラットフォーム規約を遵守した安心設計</h3>
+<p>LINEの公式API(Messaging API / LIFF)のみを正規の方法で利用しています。規約回避を目的とした機能は一切なく、アカウント停止などのリスクを避けた設計です。</p>
+
+<h2>コストの目安</h2>
+<table>
+  <tr><th></th><th>一般的な有料SaaS</th><th>School Harness</th></tr>
+  <tr><td>初期費用</td><td>0〜数万円</td><td class="price"><span class="big">0円</span></td></tr>
+  <tr><td>月額利用料</td><td>約2〜3万円+オプション課金(見積もり制が多い)</td><td class="price"><span class="big">0円</span></td></tr>
+  <tr><td>サーバー費</td><td>利用料に含む</td><td>Cloudflare無料枠で運用可(生徒〜50名規模の目安)</td></tr>
+  <tr><td>LINE通知</td><td>サービスによる</td><td>LINE公式アカウント無料プラン(月200通)内で運用できる設計</td></tr>
+  <tr><td>データの所在</td><td>運営会社のサーバー</td><td>教室自身のCloudflareアカウント内</td></tr>
+  <tr><td>解約時</td><td>データ引き出しはサービス仕様に依存</td><td>ロックインなし(データは常に手元・CSV/SQL出力可)</td></tr>
+</table>
+
+<h2>導入に必要なもの・導入の流れ</h2>
+<p>必要なのは、いずれも<b>無料で作れる3つのアカウント</b>だけです:LINE公式アカウント(LINE Developers)/ Cloudflareアカウント / GitHubアカウント。</p>
+<ol class="steps">
+  <li><b>アカウント準備</b> — 上記3つのアカウントを作成(各10分程度)</li>
+  <li><b>セットアップ</b> — 同梱の自動セットアップ(<code>pnpm setup</code>)を実行。対話形式でデータベース作成からLINE連携設定まで進みます。AIアシスタント(Claude Code)に作業を任せることもできます</li>
+  <li><b>教室の初期設定</b> — 管理画面からクラス・生徒を登録し、保護者に招待コードとLINE友だち追加のご案内を配布</li>
+  <li><b>運用開始</b> — 入退室カードを配って利用スタート。保護者向けの「つかいかたガイド」(別紙)もご用意しています</li>
+</ol>
+<div class="note">
+  <b>ITが得意でなくても大丈夫:</b> 日常の運用(生徒登録・欠席確認・お知らせ配信・請求書発行)は、すべて日本語の管理画面から行えます。プログラミングの知識が必要なのは最初のセットアップだけで、その部分は手順書と自動化スクリプト、AIによる対話サポートを用意しています。
+</div>
+
+<h2>ご留意いただきたいこと</h2>
+<div class="warn">
+  <b>正直にお伝えします:</b> School Harness はセルフホスト型のオープンソースソフトウェアです。サポート窓口を持つ商用サービスと異なり、システムの運用責任(アップデートの適用、データのバックアップ、個人情報の管理)は導入者ご自身にあります。また、LINEの無料メッセージ枠(月200通)を超える通知を行う場合は、LINE公式アカウントの有料プラン(ライトプラン:月5,500円〜)が必要になります。生徒数が多く入退室通知をすべてPushしたい場合等は、無料枠に収める運用ガイド(README)をご確認ください。
+</div>
+
+<div class="footer">
+  School Harness — 塾・習い事教室向けオープンソース運営管理システム(MITライセンス)。本資料の記載内容は開発時点のものであり、機能・仕様は予告なく変更される場合があります。
+</div>
+
+</div>
+</body>
+</html>
