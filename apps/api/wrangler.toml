@@ -17,6 +17,9 @@ LINE_FREE_PUSH_QUOTA = "200"
 # LINE Login (LIFF) チャネルID。LIFFアプリのIDトークン検証(audience)に使用する。
 # 秘密情報ではないが、LINE Developersコンソールで発行された値に置き換えること。
 LIFF_CHANNEL_ID = "REPLACE_WITH_YOUR_LINE_LOGIN_CHANNEL_ID"
+# CORSで許可するオリジン(カンマ区切り)。本番では管理画面とLIFFのURLに絞ることを推奨。
+# 例: "https://admin.example.com,https://liff.example.com"
+ALLOWED_ORIGINS = "*"
 
 # LINE_CHANNEL_ACCESS_TOKEN / LINE_CHANNEL_SECRET はローカルでは
 # .dev.vars に、本番では `wrangler secret put` で設定してください(平文で書かない)。

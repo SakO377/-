@@ -4,15 +4,13 @@ import { pushMessage, type LineMessage } from "./line";
 
 /** 当月(UTC基準)に消費した無料メッセージ枠(push/multicastの受信者数合計) */
 export async function getMonthlyPushCount(env: Env): Promise<number> {
-  const monthStart = new Date();
-  monthStart.setUTCDate(1);
-  monthStart.setUTCHours(0, 0, 0, 0);
+  // sent_at は datetime('now') 形式("YYYY-MM-DD HH:MM:SS")なので、
+  // 比較値も同じ形式でSQLite側で生成する(ISO文字列との混在比較を避ける)
   const row = await env.DB.prepare(
     `SELECT COALESCE(SUM(recipient_count), 0) AS total FROM line_message_log
-     WHERE message_type IN ('push', 'multicast') AND sent_at >= ?`
-  )
-    .bind(monthStart.toISOString())
-    .first<{ total: number }>();
+     WHERE message_type IN ('push', 'multicast')
+       AND sent_at >= strftime('%Y-%m-01 00:00:00', 'now')`
+  ).first<{ total: number }>();
   return row?.total ?? 0;
 }
 

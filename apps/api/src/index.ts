@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import type { Env, Variables } from "./types";
 import setup from "./routes/setup";
 import students from "./routes/students";
@@ -16,6 +17,20 @@ import liff from "./routes/liff";
 import kiosk from "./routes/kiosk";
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
+
+// 管理画面(Pages)・LIFFはAPIと別オリジンで動くためCORSが必須。
+// 認証はヘッダー(X-API-Key / Authorization)のみでCookieを使わないため、
+// 既定では全オリジンを許可し、ALLOWED_ORIGINSで自ドメインに絞り込める。
+app.use("*", async (c, next) => {
+  const allowed = (c.env.ALLOWED_ORIGINS ?? "*").split(",").map((s) => s.trim());
+  const handler = cors({
+    origin: (origin) =>
+      allowed.includes("*") || allowed.includes(origin) ? origin : null,
+    allowHeaders: ["Content-Type", "X-API-Key", "Authorization"],
+    allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+  });
+  return handler(c, next);
+});
 
 app.get("/", (c) =>
   c.json({
@@ -56,9 +71,11 @@ app.route("/kiosk", kiosk);
 
 async function scheduled(_event: ScheduledController, env: Env): Promise<void> {
   // 予約配信(scheduled_at到達済み・未送信)のお知らせを送信する
+  // scheduled_at はISO 8601形式で保存されるため、datetime()でSQLiteの
+  // 標準形式に正規化してから比較する(文字列形式の混在比較を避ける)
   const { results } = await env.DB.prepare(
     `SELECT * FROM announcements
-     WHERE sent_at IS NULL AND scheduled_at IS NOT NULL AND scheduled_at <= datetime('now')`
+     WHERE sent_at IS NULL AND scheduled_at IS NOT NULL AND datetime(scheduled_at) <= datetime('now')`
   ).all<{ id: string; title: string; body: string; segment: string; sent_at: string | null }>();
 
   for (const row of results ?? []) {
