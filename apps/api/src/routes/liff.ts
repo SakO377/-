@@ -5,6 +5,7 @@ import type { Env } from "../types";
 import { verifyLineIdToken, type VerifiedLineUser } from "../lib/line";
 import { generateId } from "../lib/id";
 import { parseJsonArray, parseJsonObject } from "../lib/json";
+import { renderInvoiceHtml } from "../lib/invoice-html";
 
 const liff = new Hono<{ Bindings: Env }>();
 
@@ -288,6 +289,51 @@ liff.post("/announcements/:id/read", async (c) => {
     .bind(id, guardian.id)
     .run();
   return c.json({ read: true });
+});
+
+// 保護者自身と紐付けられた生徒宛の送信済み請求書一覧
+liff.get("/invoices", async (c) => {
+  const guardian = await requireGuardian(c);
+  if (!guardian) return c.json({ error: "認証に失敗しました" }, 401);
+
+  const { results } = await c.env.DB.prepare(
+    `SELECT i.id, i.year_month, i.total, i.paid_status, i.sent_at, s.name AS student_name
+     FROM invoices i
+     JOIN students s ON s.id = i.student_id
+     JOIN student_guardians sg ON sg.student_id = i.student_id
+     WHERE sg.guardian_id = ? AND i.sent_at IS NOT NULL
+     ORDER BY i.year_month DESC`
+  )
+    .bind(guardian.id)
+    .all();
+
+  return c.json({ invoices: results ?? [] });
+});
+
+liff.get("/invoices/:id/print", async (c) => {
+  const guardian = await requireGuardian(c);
+  if (!guardian) return c.json({ error: "認証に失敗しました" }, 401);
+
+  const id = c.req.param("id");
+  const row = await c.env.DB.prepare(
+    `SELECT i.*, s.name AS student_name FROM invoices i
+     JOIN students s ON s.id = i.student_id
+     JOIN student_guardians sg ON sg.student_id = i.student_id
+     WHERE i.id = ? AND sg.guardian_id = ?`
+  )
+    .bind(id, guardian.id)
+    .first<{ student_name: string; year_month: string; items: string; total: number }>();
+  if (!row) return c.json({ error: "Not found" }, 404);
+
+  const html = renderInvoiceHtml({
+    schoolName: "School Harness",
+    studentName: row.student_name,
+    yearMonth: row.year_month,
+    items: parseJsonArray(row.items) as { label: string; amount: number }[],
+    total: row.total,
+    issuedAt: new Date().toLocaleDateString("ja-JP"),
+  });
+  return c.html(html);
 });
 
 export default liff;

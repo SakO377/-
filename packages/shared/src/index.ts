@@ -37,6 +37,7 @@ export interface Student {
   status: StudentStatus;
   tags: string[];
   metadata: Record<string, unknown>;
+  monthly_fee: number | null;
   created_at: string;
 }
 

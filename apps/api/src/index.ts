@@ -10,6 +10,7 @@ import settings from "./routes/settings";
 import reportTemplates from "./routes/report-templates";
 import reports from "./routes/reports";
 import announcements, { sendAnnouncementNow } from "./routes/announcements";
+import invoices from "./routes/invoices";
 import lineWebhook from "./routes/line-webhook";
 import liff from "./routes/liff";
 import kiosk from "./routes/kiosk";
@@ -42,6 +43,7 @@ app.route("/api/settings", settings);
 app.route("/api/report-templates", reportTemplates);
 app.route("/api/reports", reports);
 app.route("/api/announcements", announcements);
+app.route("/api/invoices", invoices);
 
 // LINE Messaging API Webhook(署名検証あり、APIキー不要)
 app.route("/line", lineWebhook);

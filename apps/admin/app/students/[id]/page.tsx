@@ -16,6 +16,7 @@ interface StudentDetail {
   status: StudentStatus;
   tags: string[];
   qr_token: string | null;
+  monthly_fee: number | null;
   guardians: {
     id: string;
     name: string | null;
@@ -38,11 +39,13 @@ function StudentDetailView() {
   const [error, setError] = useState<string | null>(null);
   const [invite, setInvite] = useState<InviteCodeResult | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [monthlyFeeInput, setMonthlyFeeInput] = useState("");
 
   const load = useCallback(async () => {
     try {
       const res = await apiFetch<StudentDetail>(`/api/students/${params.id}`);
       setStudent(res);
+      setMonthlyFeeInput(res.monthly_fee != null ? String(res.monthly_fee) : "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "読み込みに失敗しました");
     }
@@ -82,6 +85,16 @@ function StudentDetailView() {
       method: "POST",
     });
     setInvite(res);
+  }
+
+  async function saveMonthlyFee() {
+    if (!student) return;
+    const monthly_fee = monthlyFeeInput === "" ? null : Number(monthlyFeeInput);
+    const res = await apiFetch<StudentDetail>(`/api/students/${student.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ monthly_fee }),
+    });
+    setStudent({ ...student, monthly_fee: res.monthly_fee });
   }
 
   async function regenerateQr() {
@@ -156,6 +169,29 @@ function StudentDetailView() {
             </p>
           </div>
         )}
+      </section>
+
+      <section className="mb-6">
+        <h2 className="mb-2 font-semibold">月謝</h2>
+        <div className="flex items-center gap-2">
+          <span>¥</span>
+          <input
+            type="number"
+            className="w-32 rounded border px-3 py-2 text-sm"
+            value={monthlyFeeInput}
+            onChange={(e) => setMonthlyFeeInput(e.target.value)}
+            placeholder="未設定"
+          />
+          <button
+            onClick={saveMonthlyFee}
+            className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50"
+          >
+            保存
+          </button>
+        </div>
+        <p className="mt-1 text-sm text-gray-500">
+          請求書作成時にこの金額が「月謝」項目として自動入力されます(兄弟割引等はその都度手動調整)。
+        </p>
       </section>
 
       <section className="mb-6">

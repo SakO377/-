@@ -17,6 +17,7 @@ const studentInput = z.object({
   status: z.enum(["在籍", "休会", "退会"]).optional(),
   tags: z.array(z.string()).optional(),
   metadata: z.record(z.unknown()).optional(),
+  monthly_fee: z.number().int().nonnegative().nullable().optional(),
 });
 
 // D1の行(rawなJSON文字列カラムを含む)をAPIレスポンス用に整形する
@@ -44,7 +45,7 @@ students.get("/", async (c) => {
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   // qr_token は入退室QRの秘密情報なので一覧では返さない
   const { results } = await c.env.DB.prepare(
-    `SELECT id, name, grade, course, class_id, status, tags, metadata, created_at
+    `SELECT id, name, grade, course, class_id, status, tags, metadata, monthly_fee, created_at
      FROM students ${where} ORDER BY created_at DESC`
   )
     .bind(...params)
@@ -57,8 +58,8 @@ students.post("/", zValidator("json", studentInput), async (c) => {
   const id = generateId("student");
   const qrToken = generateQrToken();
   await c.env.DB.prepare(
-    `INSERT INTO students (id, name, grade, course, class_id, status, tags, metadata, qr_token)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO students (id, name, grade, course, class_id, status, tags, metadata, qr_token, monthly_fee)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
@@ -69,7 +70,8 @@ students.post("/", zValidator("json", studentInput), async (c) => {
       body.status ?? "在籍",
       JSON.stringify(body.tags ?? []),
       JSON.stringify(body.metadata ?? {}),
-      qrToken
+      qrToken,
+      body.monthly_fee ?? null
     )
     .run();
   const row = await c.env.DB.prepare("SELECT * FROM students WHERE id = ?").bind(id).first();
@@ -129,6 +131,10 @@ students.patch("/:id", zValidator("json", studentInput.partial()), async (c) => 
   if (body.metadata !== undefined) {
     fields.push("metadata = ?");
     params.push(JSON.stringify(body.metadata));
+  }
+  if (body.monthly_fee !== undefined) {
+    fields.push("monthly_fee = ?");
+    params.push(body.monthly_fee);
   }
   if (fields.length > 0) {
     params.push(id);
