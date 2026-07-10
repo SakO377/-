@@ -1,6 +1,20 @@
+import type { StaffRole } from "@school-harness/shared";
+
 export interface Env {
   DB: D1Database;
   LINE_FREE_PUSH_QUOTA: string;
   LINE_CHANNEL_ACCESS_TOKEN: string;
   LINE_CHANNEL_SECRET: string;
+  /** LINE Login (LIFF) チャネルID。IDトークン検証の audience として使用する。 */
+  LIFF_CHANNEL_ID: string;
+}
+
+export interface AuthedStaff {
+  id: string;
+  name: string;
+  role: StaffRole;
+}
+
+export interface Variables {
+  staff: AuthedStaff;
 }

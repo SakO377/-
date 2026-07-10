@@ -14,6 +14,9 @@ migrations_dir = "migrations"
 [vars]
 # LINE Messaging API の無料メッセージ枠(月あたりのPush通知数)
 LINE_FREE_PUSH_QUOTA = "200"
+# LINE Login (LIFF) チャネルID。LIFFアプリのIDトークン検証(audience)に使用する。
+# 秘密情報ではないが、LINE Developersコンソールで発行された値に置き換えること。
+LIFF_CHANNEL_ID = "REPLACE_WITH_YOUR_LINE_LOGIN_CHANNEL_ID"
 
 # LINE_CHANNEL_ACCESS_TOKEN / LINE_CHANNEL_SECRET はローカルでは
 # .dev.vars に、本番では `wrangler secret put` で設定してください(平文で書かない)。

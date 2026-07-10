@@ -1,7 +1,14 @@
 import { Hono } from "hono";
-import type { Env } from "./types";
+import type { Env, Variables } from "./types";
+import setup from "./routes/setup";
+import students from "./routes/students";
+import guardians from "./routes/guardians";
+import classes from "./routes/classes";
+import absences from "./routes/absences";
+import lineWebhook from "./routes/line-webhook";
+import liff from "./routes/liff";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 app.get("/", (c) =>
   c.json({
@@ -18,6 +25,17 @@ app.get("/health", async (c) => {
   });
 });
 
-// 生徒 / 保護者 / クラス などの CRUD ルートは Step 2 で追加する。
+// 管理画面向けAPI(要 X-API-Key)
+app.route("/api/setup", setup);
+app.route("/api/students", students);
+app.route("/api/guardians", guardians);
+app.route("/api/classes", classes);
+app.route("/api/absences", absences);
+
+// LINE Messaging API Webhook(署名検証あり、APIキー不要)
+app.route("/line", lineWebhook);
+
+// 保護者向けLIFF API(LINE IDトークンで認証、APIキー不要)
+app.route("/liff", liff);
 
 export default app;
