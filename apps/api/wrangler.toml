@@ -1,0 +1,19 @@
+name = "school-harness-api"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+# 各教室ごとに `wrangler d1 create school-harness` を実行し、
+# 発行された database_id をここに設定してください。
+[[d1_databases]]
+binding = "DB"
+database_name = "school-harness"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[vars]
+# LINE Messaging API の無料メッセージ枠(月あたりのPush通知数)
+LINE_FREE_PUSH_QUOTA = "200"
+
+# LINE_CHANNEL_ACCESS_TOKEN / LINE_CHANNEL_SECRET はローカルでは
+# .dev.vars に、本番では `wrangler secret put` で設定してください(平文で書かない)。

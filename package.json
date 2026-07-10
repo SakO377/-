@@ -1,0 +1,22 @@
+{
+  "name": "school-harness",
+  "private": true,
+  "version": "0.1.0",
+  "description": "塾・習い事教室向けオープンソース運営管理システム",
+  "license": "MIT",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev:api": "pnpm --filter @school-harness/api dev",
+    "dev:admin": "pnpm --filter @school-harness/admin dev",
+    "dev:liff": "pnpm --filter @school-harness/liff dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "sharp", "workerd"]
+  }
+}

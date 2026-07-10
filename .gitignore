@@ -1,0 +1,21 @@
+node_modules
+.pnpm-store
+
+# build outputs
+.next
+out
+dist
+.wrangler
+
+# env / secrets
+.env
+.env.local
+.dev.vars
+
+*.tsbuildinfo
+
+# misc
+*.log
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
