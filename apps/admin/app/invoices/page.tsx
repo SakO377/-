@@ -152,6 +152,7 @@ function InvoicesView() {
                 />
                 <input
                   type="number"
+                  step="100"
                   className="w-32 rounded border px-3 py-2 text-sm"
                   value={item.amount}
                   onChange={(e) => updateItem(i, { amount: Number(e.target.value) })}

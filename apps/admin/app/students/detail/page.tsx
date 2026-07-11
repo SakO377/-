@@ -380,6 +380,7 @@ function StudentDetailView() {
           <span>¥</span>
           <input
             type="number"
+            step="100"
             className="w-32 rounded border px-3 py-2 text-sm"
             value={monthlyFeeInput}
             onChange={(e) => setMonthlyFeeInput(e.target.value)}

@@ -51,6 +51,14 @@ function AbsencesView() {
     load();
   }
 
+  async function reopen(id: string) {
+    await apiFetch(`/api/absences/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "申請" }),
+    });
+    load();
+  }
+
   return (
     <main className="mx-auto max-w-4xl p-6">
       <h1 className="mb-4 text-xl font-bold">欠席・振替連絡</h1>
@@ -77,32 +85,39 @@ function AbsencesView() {
                 <td className="py-2">{a.status}</td>
                 <td className="py-2">{a.makeup_date ?? "-"}</td>
                 <td className="py-2">
-                  {a.status !== "確定" && (
-                    <div className="flex flex-col gap-1">
-                      <div className="flex gap-1">
-                        <input
-                          type="date"
-                          className="rounded border px-2 py-1 text-xs"
-                          value={makeupDrafts[a.id] ?? a.makeup_date ?? ""}
-                          onChange={(e) =>
-                            setMakeupDrafts({ ...makeupDrafts, [a.id]: e.target.value })
-                          }
-                        />
-                        <button
-                          onClick={() => proposeMakeup(a.id)}
-                          className="rounded border px-2 py-1 text-xs hover:bg-gray-50"
-                        >
-                          振替日を提案
-                        </button>
-                      </div>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex gap-1">
+                      <input
+                        type="date"
+                        className="rounded border px-2 py-1 text-xs"
+                        value={makeupDrafts[a.id] ?? a.makeup_date ?? ""}
+                        onChange={(e) =>
+                          setMakeupDrafts({ ...makeupDrafts, [a.id]: e.target.value })
+                        }
+                      />
+                      <button
+                        onClick={() => proposeMakeup(a.id)}
+                        className="rounded border px-2 py-1 text-xs hover:bg-gray-50"
+                      >
+                        振替日を提案
+                      </button>
+                    </div>
+                    {a.status !== "確定" ? (
                       <button
                         onClick={() => confirm(a.id)}
                         className="rounded bg-black px-2 py-1 text-xs text-white"
                       >
                         確定にする
                       </button>
-                    </div>
-                  )}
+                    ) : (
+                      <button
+                        onClick={() => reopen(a.id)}
+                        className="rounded border px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                      >
+                        確定を取り消す
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
