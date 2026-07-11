@@ -1,178 +1,116 @@
-# School Harness (仮称)
+# KinReal(キンリアル)
 
-塾・習い事教室向けの、オープンソース(MITライセンス)な運営管理システムです。
-[LINE Harness](https://github.com/Shudesu/line-harness-oss) と同じ「セルフホスト型OSS」モデルを踏襲しています。
+**「ランダムな時刻に通知が鳴ったら、その瞬間に筋トレして証拠を撮る」** 筋トレ版 BeReal です。
 
-- 利用料は永久に0円。GitHubで公開されたコードを、自分の Cloudflare アカウントにデプロイして使います
-- 生徒・保護者の個人情報は各教室の Cloudflare D1 に保存され、第三者サーバーを経由しません
-- 保護者との連絡は LINE 公式アカウント + LIFF で完結します(専用アプリのインストール不要)
-- 管理画面の機能はすべて REST API として公開しており、Claude Code や MCP 経由での自然言語操作にも対応します
+- 🔔 1日1回、自分で決めた時間帯(例: 8時〜22時)のどこかで**ランダムに通知**が鳴る
+- 💪 通知が鳴ったら、事前に登録した**筋トレメニュー**をこなす
+- 📸 やり終えたら**カメラで証拠を撮影**して記録
+- 🔥 **ストリーク(連続達成日数)**が伸びていくのがゲームの中心
 
-> **開発ステータス**: MVP(Phase 1)の全機能を実装済みですが、実運用での動作確認はまだです。
-> 本番投入前に必ずテストチャネルでLINE連携を含めた一通りの動作確認を行ってください。
+## お金の話(完全無料で始める方針)
 
-## なぜ作るのか
-
-学習塾・ピアノ・英会話・スイミング・ダンス・そろばん・スポーツクラブなど、「習い事教室」の運営管理システムは
-有料SaaS(月2〜3万円+オプション課金が相場)しか選択肢がありませんでした。個人・小規模経営の教室が最も重く感じる
-固定費を、無料のOSSで置き換えることが目的です。
-
-## できること(Phase 1 / MVP)
-
-| 機能 | 管理画面 | 保護者(LIFF) |
-|---|---|---|
-| 生徒・保護者・クラス管理 | ○ CRUD | 招待コードでの連携 |
-| 入退室管理 | ○ QRリーダー画面・履歴・CSV出力 | プル型の履歴確認(通知OFF時) |
-| 欠席・振替連絡 | ○ 振替日提案・確定 | ○ 欠席連絡・振替日の承認 |
-| 指導報告書 | ○ テンプレート・作成・送信 | ○ 閲覧・既読管理 |
-| お知らせ配信 | ○ 全体/クラス別/タグ別・予約配信 | ○ 閲覧・既読管理 |
-| 月謝・請求書 | ○ 作成・印刷(PDF保存)・送信・入金消込 | ○ 閲覧・印刷(PDF保存) |
-
-## 技術スタック
-
-| レイヤー | 技術 |
+| 段階 | 費用 |
 |---|---|
-| 管理画面 (`apps/admin`) | Next.js 15 + Tailwind CSS 4(Cloudflare Pages) |
-| API (`apps/api`) | Hono on Cloudflare Workers |
-| DB | Cloudflare D1 (SQLite) |
-| 保護者側UI (`apps/liff`) | LINE公式アカウント + LIFF |
-| 通知 | LINE Messaging API |
-| 認証 | 管理画面: APIキー方式 / 保護者: LINE Login (LIFF) |
+| 自分のiPhoneで動かす(いま) | **0円**(Expo Goという無料アプリを使う) |
+| 友達に配って遊んでもらう | **0円**(友達もExpo Goを入れるだけ) |
+| フレンドフィード機能(将来) | **0円**(Supabaseの無料枠を予定) |
+| App Storeに正式公開(将来) | Apple Developer Program **年間$99** が必要 |
 
-## リポジトリ構成
+App Storeへの公開・TestFlightでの配布だけは有料ですが、そこまでの開発・テスト・友達への配布はすべて無料でできます。
 
-```
-apps/
-  admin/    管理画面 (Next.js)
-  api/      REST API (Hono on Cloudflare Workers) + D1マイグレーション
-  liff/     保護者向け LIFF アプリ (Next.js)
-packages/
-  shared/   共有の型定義・定数
-scripts/
-  setup.mjs 初期セットアップ自動化スクリプト(pnpm setup)
-```
+## 動かすのに必要なもの
 
-## クイックスタート
+1. **パソコン**(WindowsでもMacでもOK。**Macは不要**です)
+2. **Node.js**(JavaScriptを動かすソフト) — [nodejs.org](https://nodejs.org/ja) から「LTS」版をインストール
+3. **iPhone** に App Store から **Expo Go** アプリをインストール(無料)
+
+> Expo Go とは: 開発中のアプリを、App Store審査なしで自分のiPhoneですぐ動かせる「実行専用アプリ」です。
+
+## iPhoneで動かす手順
+
+パソコンのターミナル(Windowsなら「PowerShell」、Macなら「ターミナル」)で以下を実行します。
 
 ```bash
-pnpm install
-pnpm setup   # Cloudflareログイン確認・D1作成・LINE認証情報の入力を対話形式で行う
+# 1. このリポジトリを取得(初回のみ)
+git clone <このリポジトリのURL>
+cd <リポジトリのフォルダ>
+
+# 2. ライブラリをインストール(初回のみ。数分かかります)
+npm install
+
+# 3. 開発サーバーを起動
+npx expo start --tunnel
 ```
 
-`pnpm setup` は以下を自動化します。
+すると、ターミナルに **QRコード** が表示されます。
 
-1. `wrangler login`(未ログインの場合のみブラウザが開きます)
-2. `wrangler d1 create` でD1データベースを作成し、`apps/api/wrangler.toml` に反映
-3. LINE Messaging API / LINE Login の認証情報を聞き取り、`apps/api/.dev.vars` に保存
-4. ローカルD1へのマイグレーション適用
+4. iPhoneの**カメラアプリ**でQRコードを読み取る → 「Expo Goで開く」をタップ
+5. アプリが起動したら、**設定タブ →「テスト通知を送る」**で通知が届くか確認
+6. **メニュータブ**で筋トレメニューを登録すれば準備完了!
 
-完了したら、別々のターミナルで以下を起動します。
+> `--tunnel` を付けると、パソコンとiPhoneが別のWi-Fiでも繋がります(初回は ngrok のインストールを聞かれるので y を押す)。同じWi-Fiなら `npx expo start` だけでもOKです。
 
-```bash
-pnpm dev:api      # API    http://localhost:8787
-pnpm dev:admin    # 管理画面 http://localhost:3000
-pnpm dev:liff     # LIFF   http://localhost:3001
+### 友達に配るには
+
+友達のiPhoneにも Expo Go を入れてもらい、同じQRコードを読んでもらえば動きます(開発サーバー起動中のみ)。
+サーバーを起動していなくても動く配布方法(EAS Update)は、次の開発ステップで用意します。
+
+## 使い方(画面ごと)
+
+| タブ | できること |
+|---|---|
+| 🔥 ホーム | ストリークと「今日のミッション」の状態を表示。通知が鳴ったらここからミッション開始 |
+| 📷 きろく | 過去の達成記録と証拠写真の一覧 |
+| 💪 メニュー | 通知が来たときにやる筋トレメニューの登録(例: 腕立て伏せ 10回) |
+| ⚙️ 設定 | 通知ON/OFF・通知が来てよい時間帯・テスト通知 |
+
+## 仕組み(なぜサーバーなしで動くのか)
+
+- 通知は iOS の**ローカル通知**(iPhone自身が予約して鳴らす通知)を使っています。アプリを開くたびに「今日から7日分」のランダムな時刻を抽選してiPhoneに予約します。
+- 一度抽選した時刻は変わりません(サプライズを守るため、画面にも表示しません)。
+- 記録・写真・設定は**すべてiPhoneの中**に保存されます。サーバーには何も送りません。
+- そのため、**アプリ(Expo Go内のデータ)を消すと記録も消えます**。
+
+## フォルダ構成
+
+```
+src/
+  app/                 画面(ファイル=画面のURLになる仕組み: expo-router)
+    _layout.tsx        全画面共通の土台。通知タップでミッション画面を開く処理もここ
+    (tabs)/            下タブの4画面
+      index.tsx        ホーム
+      history.tsx      きろく
+      menus.tsx        メニュー登録
+      settings.tsx     設定
+    workout.tsx        ミッション画面(チェックリスト→カメラ→記録)
+  lib/                 画面に依存しないロジック
+    types.ts           データの型定義
+    storage.ts         データの保存・読み出し(AsyncStorage)
+    notifications.ts   ランダム通知の抽選と予約(このアプリの心臓部)
+    streak.ts          ストリーク計算
+    photos.ts          証拠写真の保存
+    date.ts            日付ユーティリティ
+  components/          使い回すUI部品(ボタンなど)
+  constants/theme.ts   色・余白などのデザイン定数
 ```
 
-管理画面の `http://localhost:3000/setup` から最初のオーナーアカウント(APIキー)を作成してください。
-このAPIキーは二度と表示されないので、必ず控えてください。
+## Expo Goで動かす間の制約(知っておくこと)
 
-### Claude Codeに任せてセットアップする場合
+- 通知の差出人が「Expo Go」と表示されます(自分のアプリ名・アイコンになるのは正式ビルド後)
+- ホーム画面にKinRealのアイコンは並びません(Expo Goの中から開きます)
+- iOSの制約でローカル通知の予約は64件までのため、7日分だけ先に予約する設計にしています
 
-非エンジニアの方は、このリポジトリを開いた状態のClaude Codeに次のように依頼すると、対話形式で
-セットアップを進めてくれます(LINE Developersコンソールでの操作など、ブラウザ側の作業は自分で行う必要があります)。
+## ロードマップ
 
-```
-このリポジトリ(School Harness)を初めてセットアップします。
-README.md の「クイックスタート」に沿って、pnpm install と pnpm setup を実行してください。
-LINE Developersでの作業(チャネル作成など)が必要な箇所は、何をどこで設定すればよいか
-一つずつ具体的に教えてください。
-```
+- [x] Step 1: MVPコア(メニュー登録 → ランダム通知 → カメラ撮影 → ストリーク)
+- [ ] Step 2: 実機での動作確認・使い心地の改善(通知からの制限時間演出など)
+- [ ] Step 3: 開発サーバーなしで友達に配れるようにする(EAS Update・無料枠)
+- [ ] Step 4: フレンドフィード+リアクション(Supabase無料枠 / アカウント機能)
+- [ ] Step 5: App Store公開(Apple Developer Program 年$99・審査対応・通報/ブロック機能)
 
-## LINE Developersでの事前準備
+## トラブルシューティング
 
-1. [LINE Developers](https://developers.line.biz/ja/) で「プロバイダー」を作成
-2. **Messaging APIチャネル**を作成し、以下を控える
-   - チャネルアクセストークン(長期)→ `LINE_CHANNEL_ACCESS_TOKEN`
-   - チャネルシークレット → `LINE_CHANNEL_SECRET`
-   - Webhook URL に `https://<デプロイ先のドメイン>/line/webhook` を設定し、Webhookの利用をONにする
-   - 応答メッセージ・あいさつメッセージは基本OFF推奨(本システムが Reply で応答するため)
-3. **LINE Loginチャネル**を作成し、LIFFアプリを追加する
-   - LIFFのエンドポイントURLに、デプロイした `apps/liff` のURL(例: `https://liff.example.com/link`)を設定
-   - 発行された **LIFF ID** → `apps/liff/.env.example` の `NEXT_PUBLIC_LIFF_ID`
-   - **Channel ID**(LINE Loginチャネル自体のID)→ `apps/api/wrangler.toml` の `LIFF_CHANNEL_ID`
-     (IDトークンの検証に使用。秘密情報ではないが正しい値に置き換える必要がある)
-
-## 本番デプロイ
-
-```bash
-# API (Cloudflare Workers)
-cd apps/api
-npx wrangler secret put LINE_CHANNEL_ACCESS_TOKEN
-npx wrangler secret put LINE_CHANNEL_SECRET
-npx wrangler d1 migrations apply school-harness --remote
-npx wrangler deploy
-
-# 管理画面 / LIFF (Cloudflare Pages)
-cd apps/admin && pnpm build   # .next を Cloudflare Pages に接続してデプロイ
-cd apps/liff && pnpm build
-```
-
-お知らせの予約配信は Cloudflare Cron Trigger(`apps/api/wrangler.toml` の `[triggers]`)で
-5分おきに実行されます。`wrangler deploy` 時に自動的に登録されます。
-
-## 重要な制約: LINE無料メッセージ枠(月200通)
-
-LINE Messaging API の無料枠は月200通の Push 通知までです。生徒30人規模の教室で入退室通知を毎回 Push すると
-簡単に超過します(超過するとLINE公式アカウントのライトプラン月5,500円等が必要)。本プロジェクトは以下の設計で対応しています。
-
-- ユーザー操作に対する応答(Reply)は無料・無制限。友だち追加時の案内メッセージなどは常にReplyを使う
-- 入退室通知は管理画面(`/attendance`)で機能単位にON/OFFでき、OFF時は保護者がLIFF内の履歴画面で確認する
-  プル型にフォールバックする(無料枠を消費しない)
-- お知らせ配信はセグメント配信(全体/クラス別/タグ別)で対象を絞れる
-- 保護者ごとにPush通知の受信有無を設定でき(既定はON)、OFFの保護者にはPushを送らずアプリ内で確認してもらう
-- 送信直前に当月の消費量をチェックし、無料枠(既定200通、`LINE_FREE_PUSH_QUOTA` で変更可)を超える場合は
-  自動的に送信をスキップする(保護者はLIFF側のプル型UIで確認可能)
-- 管理画面(`/attendance`)に当月の配信数カウンターと無料枠残量を表示する(`line_message_log` テーブルで集計)
-
-**運用の目安**: 生徒30人・保護者1人ずつの教室で入退室のPush通知(入室+退室)を全員ONにすると、
-月間で最大 30人 × 2回 × 授業日数 分のPushを消費します。週2回・月8日通塾なら 30 × 2 × 8 = 480通となり、
-無料枠(200通)を超えます。**入退室通知はデフォルトOFFにし、お知らせ・報告書・請求書などの重要な連絡を優先する**
-運用を推奨します。
-
-## 個人情報の扱い
-
-生徒・保護者の情報は各教室が自分でデプロイした Cloudflare D1 にのみ保存され、開発者を含む第三者のサーバーを経由しません。
-管理画面へのアクセスはAPIキー必須で、スタッフのロール(owner/admin/staff)により権限を分離します。
-
-### データのエクスポート・バックアップ
-
-- 入退室履歴は管理画面(`/attendance`)からCSVダウンロードできます
-- D1データベース全体のバックアップ・移行には `wrangler d1 export` を使用してください
-
-  ```bash
-  npx wrangler d1 export school-harness --remote --output=backup.sql
-  ```
-
-- 復元する場合は `wrangler d1 execute school-harness --remote --file=backup.sql` を使用してください
-
-## 開発ロードマップ
-
-- [x] Step 1: リポジトリ初期化(monorepo, wrangler設定, D1マイグレーション基盤)
-- [x] Step 2: 生徒・保護者・クラスの CRUD API + 管理画面
-- [x] Step 3: LINE連携基盤(Webhook受信、友だち追加→LIFF紐付けフロー)
-- [x] Step 4: 欠席・振替連絡(LIFF)
-- [x] Step 5: 入退室管理 + LINE通知(配信数カウンター含む)
-- [x] Step 6: 指導報告書 / お知らせ一斉配信
-- [x] Step 7: 月謝・請求書(印刷HTMLでのPDF保存方式)
-- [x] Step 8: セットアップCLI + 非エンジニア向け導入ガイド
-- [ ] Step 9: 動作確認後、GitHub公開 (MIT)
-
-### Phase 2以降(未実装)
-
-座席・時間割管理、講師シフト・給与計算、Stripe等の決済連携、成績・テスト管理、複数教室(フランチャイズ)対応、
-問い合わせ管理は、いずれもPhase 1のスコープ外です。
-
-## ライセンス
-
-[MIT](./LICENSE)
+- **QRコードを読んでも開かない** → `npx expo start --tunnel` で起動し直す。iPhoneとPCが同じWi-Fiか確認
+- **通知が来ない** → iPhoneの「設定 → 通知 → Expo Go」で通知を許可。アプリ内の設定タブで「テスト通知」を試す
+- **カメラが真っ黒** → iPhoneの「設定 → プライバシーとセキュリティ → カメラ → Expo Go」を許可
+- **`npm install` でエラー** → Node.jsのバージョンを確認(LTS版を推奨)。一度 `node_modules` フォルダを消して再実行

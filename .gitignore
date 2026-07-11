@@ -1,21 +1,43 @@
-node_modules
-.pnpm-store
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
-# build outputs
-.next
-out
-dist
-.wrangler
+# dependencies
+node_modules/
 
-# env / secrets
-.env
-.env.local
-.dev.vars
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
 
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+
+# typescript
 *.tsbuildinfo
 
-# misc
-*.log
-.DS_Store
-.vscode/*
-!.vscode/extensions.json
+example
+
+# generated native folders
+/ios
+/android
