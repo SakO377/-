@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { Suspense, useEffect, useState, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import AuthGuard from "@/components/AuthGuard";
 import NavBar from "@/components/NavBar";
@@ -235,7 +235,8 @@ function HistoryTabs({ studentId }: { studentId: string }) {
 }
 
 function StudentDetailView() {
-  const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const studentId = searchParams.get("id") ?? "";
   const router = useRouter();
   const [student, setStudent] = useState<StudentDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -245,13 +246,13 @@ function StudentDetailView() {
 
   const load = useCallback(async () => {
     try {
-      const res = await apiFetch<StudentDetail>(`/api/students/${params.id}`);
+      const res = await apiFetch<StudentDetail>(`/api/students/${studentId}`);
       setStudent(res);
       setMonthlyFeeInput(res.monthly_fee != null ? String(res.monthly_fee) : "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "読み込みに失敗しました");
     }
-  }, [params.id]);
+  }, [studentId]);
 
   useEffect(() => {
     load();
@@ -428,7 +429,9 @@ export default function StudentDetailPage() {
   return (
     <AuthGuard>
       <NavBar />
-      <StudentDetailView />
+      <Suspense fallback={<main className="p-6 text-gray-500">読み込み中...</main>}>
+        <StudentDetailView />
+      </Suspense>
     </AuthGuard>
   );
 }

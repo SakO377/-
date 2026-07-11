@@ -67,7 +67,7 @@ function StudentsList() {
             {students.map((s) => (
               <tr key={s.id} className="border-b hover:bg-gray-50">
                 <td className="py-2">
-                  <Link href={`/students/${s.id}`} className="text-blue-600 hover:underline">
+                  <Link href={`/students/detail?id=${s.id}`} className="text-blue-600 hover:underline">
                     {s.name}
                   </Link>
                 </td>
