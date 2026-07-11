@@ -32,6 +32,208 @@ interface InviteCodeResult {
 
 const STATUSES: StudentStatus[] = ["在籍", "休会", "退会"];
 
+type TabKey = "attendance" | "absences" | "reports" | "invoices";
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "attendance", label: "入退室" },
+  { key: "absences", label: "欠席・振替" },
+  { key: "reports", label: "指導報告書" },
+  { key: "invoices", label: "請求" },
+];
+
+interface AttendanceRow {
+  id: string;
+  type: "check_in" | "check_out";
+  timestamp: string;
+  notified_at: string | null;
+}
+
+interface AbsenceRow {
+  id: string;
+  date: string;
+  reason: string | null;
+  status: string;
+  makeup_date: string | null;
+}
+
+interface ReportRow {
+  id: string;
+  author: string | null;
+  body: string;
+  sent_at: string | null;
+  read_at: string | null;
+  created_at: string;
+}
+
+interface InvoiceRow {
+  id: string;
+  year_month: string;
+  total: number;
+  paid_status: string;
+  sent_at: string | null;
+}
+
+function HistoryTabs({ studentId }: { studentId: string }) {
+  const [tab, setTab] = useState<TabKey>("attendance");
+  const [attendance, setAttendance] = useState<AttendanceRow[] | null>(null);
+  const [absences, setAbsences] = useState<AbsenceRow[] | null>(null);
+  const [reports, setReports] = useState<ReportRow[] | null>(null);
+  const [invoices, setInvoices] = useState<InvoiceRow[] | null>(null);
+
+  useEffect(() => {
+    const query = `student_id=${encodeURIComponent(studentId)}`;
+    if (tab === "attendance" && attendance === null) {
+      apiFetch<{ attendance: AttendanceRow[] }>(`/api/attendance?${query}`).then((res) =>
+        setAttendance(res.attendance)
+      );
+    }
+    if (tab === "absences" && absences === null) {
+      apiFetch<{ absences: AbsenceRow[] }>(`/api/absences?${query}`).then((res) =>
+        setAbsences(res.absences)
+      );
+    }
+    if (tab === "reports" && reports === null) {
+      apiFetch<{ reports: ReportRow[] }>(`/api/reports?${query}`).then((res) =>
+        setReports(res.reports)
+      );
+    }
+    if (tab === "invoices" && invoices === null) {
+      apiFetch<{ invoices: InvoiceRow[] }>(`/api/invoices?${query}`).then((res) =>
+        setInvoices(res.invoices)
+      );
+    }
+  }, [tab, studentId, attendance, absences, reports, invoices]);
+
+  function empty(rows: unknown[] | null, message: string) {
+    if (rows === null) return <p className="py-3 text-sm text-gray-500">読み込み中...</p>;
+    if (rows.length === 0) return <p className="py-3 text-sm text-gray-500">{message}</p>;
+    return null;
+  }
+
+  return (
+    <section className="mb-6">
+      <h2 className="mb-2 font-semibold">履歴</h2>
+      <div className="mb-2 flex gap-1 border-b">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-3 py-1.5 text-sm ${
+              tab === t.key
+                ? "border-b-2 border-black font-bold"
+                : "text-gray-500 hover:text-black"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "attendance" && (
+        <>
+          {empty(attendance, "入退室の記録はまだありません。")}
+          {attendance && attendance.length > 0 && (
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b text-left text-gray-500">
+                  <th className="py-1.5">日時</th>
+                  <th className="py-1.5">種別</th>
+                  <th className="py-1.5">通知</th>
+                </tr>
+              </thead>
+              <tbody>
+                {attendance.map((r) => (
+                  <tr key={r.id} className="border-b">
+                    <td className="py-1.5">{r.timestamp}</td>
+                    <td className="py-1.5">{r.type === "check_in" ? "入室" : "退室"}</td>
+                    <td className="py-1.5">{r.notified_at ? "通知済み" : "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
+      )}
+
+      {tab === "absences" && (
+        <>
+          {empty(absences, "欠席・振替の連絡はまだありません。")}
+          {absences && absences.length > 0 && (
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b text-left text-gray-500">
+                  <th className="py-1.5">欠席日</th>
+                  <th className="py-1.5">理由</th>
+                  <th className="py-1.5">ステータス</th>
+                  <th className="py-1.5">振替日</th>
+                </tr>
+              </thead>
+              <tbody>
+                {absences.map((r) => (
+                  <tr key={r.id} className="border-b">
+                    <td className="py-1.5">{r.date}</td>
+                    <td className="py-1.5">{r.reason ?? "-"}</td>
+                    <td className="py-1.5">{r.status}</td>
+                    <td className="py-1.5">{r.makeup_date ?? "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
+      )}
+
+      {tab === "reports" && (
+        <>
+          {empty(reports, "指導報告書はまだありません。")}
+          {reports && reports.length > 0 && (
+            <ul className="flex flex-col gap-2">
+              {reports.map((r) => (
+                <li key={r.id} className="rounded border p-3 text-sm">
+                  <p className="mb-1 text-xs text-gray-500">
+                    {r.created_at}
+                    {r.author ? ` / ${r.author}` : ""} /{" "}
+                    {r.sent_at ? (r.read_at ? "既読" : "送信済み・未読") : "未送信"}
+                  </p>
+                  <p className="whitespace-pre-wrap">{r.body}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+
+      {tab === "invoices" && (
+        <>
+          {empty(invoices, "請求書はまだありません。")}
+          {invoices && invoices.length > 0 && (
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b text-left text-gray-500">
+                  <th className="py-1.5">対象月</th>
+                  <th className="py-1.5">金額</th>
+                  <th className="py-1.5">入金</th>
+                  <th className="py-1.5">送信</th>
+                </tr>
+              </thead>
+              <tbody>
+                {invoices.map((r) => (
+                  <tr key={r.id} className="border-b">
+                    <td className="py-1.5">{r.year_month}</td>
+                    <td className="py-1.5">¥{r.total.toLocaleString("ja-JP")}</td>
+                    <td className="py-1.5">{r.paid_status}</td>
+                    <td className="py-1.5">{r.sent_at ? "送信済み" : "未送信"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 function StudentDetailView() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -212,6 +414,8 @@ function StudentDetailView() {
           印刷してカードにし、教室のQRリーダー画面(<code>/kiosk</code>)で読み取ってもらってください。
         </p>
       </section>
+
+      <HistoryTabs studentId={student.id} />
 
       <button onClick={handleDelete} className="text-sm text-red-600 hover:underline">
         この生徒を削除する

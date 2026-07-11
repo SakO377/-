@@ -10,11 +10,16 @@ absences.use("*", requireAuth);
 
 absences.get("/", async (c) => {
   const status = c.req.query("status");
+  const studentId = c.req.query("student_id");
   const conditions: string[] = [];
   const params: unknown[] = [];
   if (status) {
     conditions.push("a.status = ?");
     params.push(status);
+  }
+  if (studentId) {
+    conditions.push("a.student_id = ?");
+    params.push(studentId);
   }
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const { results } = await c.env.DB.prepare(
