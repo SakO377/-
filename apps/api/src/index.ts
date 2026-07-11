@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { Env, Variables } from "./types";
 import setup from "./routes/setup";
+import demo from "./routes/demo";
 import dashboard from "./routes/dashboard";
 import staffRoutes from "./routes/staff";
 import students from "./routes/students";
@@ -48,6 +49,9 @@ app.get("/health", async (c) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// 体験用デモ環境の初期化(DEMO_MODE=true のときのみ有効、APIキー不要)
+app.route("/api/demo", demo);
 
 // 管理画面向けAPI(要 X-API-Key)
 app.route("/api/setup", setup);

@@ -9,6 +9,8 @@ export interface Env {
   LIFF_CHANNEL_ID: string;
   /** CORSで許可するオリジン(カンマ区切り)。未設定または "*" で全オリジン許可。 */
   ALLOWED_ORIGINS?: string;
+  /** "true" のときだけ /api/demo/session を有効化する(体験用デモ環境専用)。 */
+  DEMO_MODE?: string;
 }
 
 export interface AuthedStaff {

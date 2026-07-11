@@ -1,13 +1,22 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { setApiKey } from "@/lib/api";
+import { apiFetch, ApiError, setApiKey } from "@/lib/api";
 
 export default function LoginPage() {
   const [key, setKey] = useState("");
+  const [demoEnabled, setDemoEnabled] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
+  const [demoError, setDemoError] = useState<string | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    apiFetch<{ enabled: boolean }>("/api/demo/status")
+      .then((res) => setDemoEnabled(res.enabled))
+      .catch(() => setDemoEnabled(false));
+  }, []);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -15,9 +24,47 @@ export default function LoginPage() {
     router.push("/dashboard");
   }
 
+  async function startDemo() {
+    setDemoLoading(true);
+    setDemoError(null);
+    try {
+      const res = await apiFetch<{ api_key: string }>("/api/demo/session", { method: "POST" });
+      setApiKey(res.api_key);
+      router.push("/dashboard");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setDemoError(
+          "このデモ環境は既に初期化されています。管理者から共有されたデモ用APIキーでログインしてください。"
+        );
+      } else {
+        setDemoError(err instanceof Error ? err.message : "デモの開始に失敗しました");
+      }
+    } finally {
+      setDemoLoading(false);
+    }
+  }
+
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-4 p-8">
       <h1 className="text-xl font-bold">School Harness ログイン</h1>
+
+      {demoEnabled && (
+        <div className="rounded-lg border border-green-300 bg-green-50 p-4">
+          <p className="mb-1 font-semibold text-green-800">はじめての方へ</p>
+          <p className="mb-3 text-sm text-gray-600">
+            登録不要で、見本データ入りの管理画面をそのままお試しいただけます。
+          </p>
+          <button
+            onClick={startDemo}
+            disabled={demoLoading}
+            className="w-full rounded bg-green-700 px-4 py-2 text-white disabled:opacity-50"
+          >
+            {demoLoading ? "準備中..." : "デモを試す(ログイン不要)"}
+          </button>
+          {demoError && <p className="mt-2 text-sm text-red-600">{demoError}</p>}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         <input
           className="rounded border px-3 py-2"
