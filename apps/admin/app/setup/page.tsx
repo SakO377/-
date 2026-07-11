@@ -36,7 +36,7 @@ export default function SetupPage() {
           APIキーをこの端末に保存しました。以下のキーは二度と表示されないので、必ず控えてください。
         </p>
         <code className="break-all rounded bg-gray-100 p-3 text-sm">{result.api_key}</code>
-        <Link href="/students" className="text-blue-600 underline">
+        <Link href="/dashboard" className="text-blue-600 underline">
           管理画面へ進む
         </Link>
       </main>

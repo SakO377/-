@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useLiff } from "@/lib/useLiff";
 import { apiFetch } from "@/lib/api";
+import PageHeader from "@/components/PageHeader";
 import type { AbsenceStatus } from "@school-harness/shared";
 
 interface GuardianStudent {
@@ -90,7 +91,7 @@ function AbsencesContent() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="mb-3 text-lg font-bold">欠席・振替連絡</h1>
+        <PageHeader title="欠席・振替連絡" />
         {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
         {students.length === 0 ? (
           <p className="text-sm text-gray-500">

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLiff } from "@/lib/useLiff";
 import { apiFetch, API_BASE_URL } from "@/lib/api";
+import PageHeader from "@/components/PageHeader";
 
 interface InvoiceRow {
   id: string;
@@ -50,7 +51,7 @@ function InvoicesContent() {
 
   return (
     <div>
-      <h1 className="mb-4 text-lg font-bold">請求書</h1>
+      <PageHeader title="請求書" />
       {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
       {invoices.length === 0 && <p className="text-sm text-gray-500">請求書はまだありません。</p>}
       <ul className="flex flex-col gap-3">

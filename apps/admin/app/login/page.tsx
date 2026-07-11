@@ -12,7 +12,7 @@ export default function LoginPage() {
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setApiKey(key.trim());
-    router.push("/students");
+    router.push("/dashboard");
   }
 
   return (

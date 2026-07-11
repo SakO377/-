@@ -53,6 +53,45 @@ students.get("/", async (c) => {
   return c.json({ students: (results ?? []).map(serializeStudentRow) });
 });
 
+// 生徒名簿のCSVエクスポート(/:id より先に登録してルート衝突を避ける)
+students.get("/export.csv", async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT s.name, s.grade, s.course, c.name AS class_name, s.status, s.tags, s.monthly_fee, s.created_at
+     FROM students s LEFT JOIN classes c ON c.id = s.class_id
+     ORDER BY s.created_at`
+  ).all<{
+    name: string;
+    grade: string | null;
+    course: string | null;
+    class_name: string | null;
+    status: string;
+    tags: string | null;
+    monthly_fee: number | null;
+    created_at: string;
+  }>();
+
+  const header = "氏名,学年,コース,クラス,ステータス,タグ,月謝,登録日";
+  const rows = (results ?? []).map((r) =>
+    [
+      r.name,
+      r.grade ?? "",
+      r.course ?? "",
+      r.class_name ?? "",
+      r.status,
+      parseJsonArray(r.tags).join("|"),
+      r.monthly_fee ?? "",
+      r.created_at,
+    ]
+      .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+      .join(",")
+  );
+  const csv = [header, ...rows].join("\n");
+  return c.body("﻿" + csv, 200, {
+    "Content-Type": "text/csv; charset=utf-8",
+    "Content-Disposition": "attachment; filename=students.csv",
+  });
+});
+
 students.post("/", zValidator("json", studentInput), async (c) => {
   const body = c.req.valid("json");
   const id = generateId("student");

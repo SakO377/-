@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import AuthGuard from "@/components/AuthGuard";
 import NavBar from "@/components/NavBar";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getApiKey, API_BASE_URL } from "@/lib/api";
 import type { Student } from "@school-harness/shared";
 
 function StudentsList() {
@@ -17,13 +17,35 @@ function StudentsList() {
       .catch((err) => setError(err instanceof Error ? err.message : "読み込みに失敗しました"));
   }, []);
 
+  async function downloadCsv() {
+    const apiKey = getApiKey();
+    const res = await fetch(`${API_BASE_URL}/api/students/export.csv`, {
+      headers: apiKey ? { "X-API-Key": apiKey } : {},
+    });
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "students.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <main className="mx-auto max-w-4xl p-6">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-bold">生徒一覧</h1>
-        <Link href="/students/new" className="rounded bg-black px-3 py-1.5 text-sm text-white">
-          + 新規登録
-        </Link>
+        <div className="flex gap-2">
+          <button
+            onClick={downloadCsv}
+            className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50"
+          >
+            CSVダウンロード
+          </button>
+          <Link href="/students/new" className="rounded bg-black px-3 py-1.5 text-sm text-white">
+            + 新規登録
+          </Link>
+        </div>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       {!students && !error && <p className="text-gray-500">読み込み中...</p>}

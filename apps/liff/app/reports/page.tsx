@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLiff } from "@/lib/useLiff";
 import { apiFetch } from "@/lib/api";
+import PageHeader from "@/components/PageHeader";
 
 interface ReportRow {
   id: string;
@@ -47,7 +48,7 @@ function ReportsContent() {
 
   return (
     <div>
-      <h1 className="mb-4 text-lg font-bold">指導報告書</h1>
+      <PageHeader title="指導報告書" />
       {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
       {reports.length === 0 && <p className="text-sm text-gray-500">まだ報告書はありません。</p>}
       <ul className="flex flex-col gap-3">

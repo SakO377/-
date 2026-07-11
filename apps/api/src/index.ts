@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { Env, Variables } from "./types";
 import setup from "./routes/setup";
+import dashboard from "./routes/dashboard";
+import staffRoutes from "./routes/staff";
 import students from "./routes/students";
 import guardians from "./routes/guardians";
 import classes from "./routes/classes";
@@ -49,6 +51,8 @@ app.get("/health", async (c) => {
 
 // 管理画面向けAPI(要 X-API-Key)
 app.route("/api/setup", setup);
+app.route("/api/dashboard", dashboard);
+app.route("/api/staff", staffRoutes);
 app.route("/api/students", students);
 app.route("/api/guardians", guardians);
 app.route("/api/classes", classes);

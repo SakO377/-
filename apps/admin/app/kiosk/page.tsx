@@ -17,9 +17,16 @@ export default function KioskPage() {
   const [token, setToken] = useState("");
   const [result, setResult] = useState<CheckinResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    setNow(new Date());
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -57,6 +64,16 @@ export default function KioskPage() {
       onClick={() => inputRef.current?.focus()}
     >
       <h1 className="text-2xl font-bold">School Harness 入退室チェック</h1>
+      {now && (
+        <p className="text-4xl font-bold tabular-nums text-gray-700">
+          {now.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+        </p>
+      )}
+      {now && (
+        <p className="-mt-4 text-gray-500">
+          {now.toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}
+        </p>
+      )}
       <p className="text-gray-500">QRカードをスキャナーにかざしてください</p>
 
       <form onSubmit={handleSubmit}>
