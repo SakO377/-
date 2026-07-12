@@ -6,6 +6,7 @@ import { requireAuth } from "../middleware/auth";
 import { generateId, generateInviteCode, generateQrToken } from "../lib/id";
 import { parseJsonArray, parseJsonObject } from "../lib/json";
 import { promoteGrades } from "../lib/grade-promotion";
+import { parseCsv } from "../lib/csv";
 
 const students = new Hono<{ Bindings: Env; Variables: Variables }>();
 students.use("*", requireAuth);
@@ -91,6 +92,86 @@ students.get("/export.csv", async (c) => {
     "Content-Type": "text/csv; charset=utf-8",
     "Content-Disposition": "attachment; filename=students.csv",
   });
+});
+
+// CSVで生徒名簿を一括取り込みする。列は export.csv と同じ見出し
+// (氏名/学年/コース/クラス/ステータス/タグ/月謝)を想定し、見出し名で対応付ける。
+// 「氏名」だけ必須。クラスは既存クラス名と一致すれば紐付け、なければ未設定にする。
+students.post("/import.csv", async (c) => {
+  const text = await c.req.text();
+  const rows = parseCsv(text);
+  if (rows.length < 2) {
+    return c.json({ error: "データ行がありません(1行目は見出し)" }, 400);
+  }
+
+  const header = rows[0].map((h) => h.trim());
+  const idx = (name: string) => header.indexOf(name);
+  const iName = idx("氏名");
+  if (iName < 0) {
+    return c.json({ error: "見出しに「氏名」列が必要です" }, 400);
+  }
+  const iGrade = idx("学年");
+  const iCourse = idx("コース");
+  const iClass = idx("クラス");
+  const iStatus = idx("ステータス");
+  const iTags = idx("タグ");
+  const iFee = idx("月謝");
+
+  const { results: classRows } = await c.env.DB.prepare("SELECT id, name FROM classes").all<{
+    id: string;
+    name: string;
+  }>();
+  const classByName = new Map((classRows ?? []).map((r) => [r.name, r.id]));
+  const validStatus = new Set(["在籍", "休会", "退会"]);
+
+  let created = 0;
+  const errors: { row: number; reason: string }[] = [];
+  const statements = [];
+
+  for (let r = 1; r < rows.length; r++) {
+    const cols = rows[r];
+    const name = (cols[iName] ?? "").trim();
+    if (!name) {
+      errors.push({ row: r + 1, reason: "氏名が空です" });
+      continue;
+    }
+    const grade = iGrade >= 0 ? cols[iGrade]?.trim() || null : null;
+    const course = iCourse >= 0 ? cols[iCourse]?.trim() || null : null;
+    const className = iClass >= 0 ? cols[iClass]?.trim() : "";
+    const classId = className ? classByName.get(className) ?? null : null;
+    const statusRaw = iStatus >= 0 ? cols[iStatus]?.trim() : "";
+    const status = validStatus.has(statusRaw) ? statusRaw : "在籍";
+    const tags =
+      iTags >= 0 && cols[iTags]
+        ? cols[iTags]
+            .split("|")
+            .map((t) => t.trim())
+            .filter(Boolean)
+        : [];
+    const feeRaw = iFee >= 0 ? cols[iFee]?.replace(/[^\d-]/g, "") : "";
+    const monthlyFee = feeRaw ? Number(feeRaw) : null;
+
+    statements.push(
+      c.env.DB.prepare(
+        `INSERT INTO students (id, name, grade, course, class_id, status, tags, metadata, qr_token, monthly_fee)
+         VALUES (?, ?, ?, ?, ?, ?, ?, '{}', ?, ?)`
+      ).bind(
+        generateId("student"),
+        name,
+        grade,
+        course,
+        classId,
+        status,
+        JSON.stringify(tags),
+        generateQrToken(),
+        monthlyFee
+      )
+    );
+    created++;
+  }
+
+  if (statements.length > 0) await c.env.DB.batch(statements);
+  return c.json({ created, errors });
 });
 
 students.post("/", zValidator("json", studentInput), async (c) => {

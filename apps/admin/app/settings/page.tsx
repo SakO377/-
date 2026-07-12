@@ -17,6 +17,26 @@ function SettingsView() {
   const [data, setData] = useState<SettingsData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [password, setPassword] = useState("");
+  const [pwMessage, setPwMessage] = useState<string | null>(null);
+
+  async function savePassword() {
+    setPwMessage(null);
+    if (password.length < 8) {
+      setPwMessage("パスワードは8文字以上にしてください。");
+      return;
+    }
+    try {
+      await apiFetch("/api/auth/set-password", {
+        method: "POST",
+        body: JSON.stringify({ password }),
+      });
+      setPassword("");
+      setPwMessage("パスワードを設定しました。次回から名前＋パスワードでログインできます。");
+    } catch (err) {
+      setPwMessage(err instanceof Error ? err.message : "設定に失敗しました");
+    }
+  }
 
   async function load() {
     try {
@@ -98,6 +118,29 @@ function SettingsView() {
           onBlur={(e) => save({ enrollment_guide_text: e.target.value })}
         />
         <p className="text-xs text-gray-400">入力後、枠の外をクリックすると保存されます。</p>
+      </section>
+
+      <section className="mb-6 rounded-lg border p-4">
+        <h2 className="mb-2 font-semibold">ログイン用パスワードの設定</h2>
+        <p className="mb-2 text-sm text-gray-500">
+          パスワードを設定すると、APIキーの代わりに「お名前＋パスワード」でログインできます。
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="password"
+            className="rounded border px-3 py-2 text-sm"
+            placeholder="新しいパスワード(8文字以上)"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <button
+            onClick={savePassword}
+            className="rounded bg-black px-3 py-2 text-sm text-white"
+          >
+            パスワードを設定
+          </button>
+        </div>
+        {pwMessage && <p className="mt-2 text-sm text-gray-700">{pwMessage}</p>}
       </section>
 
       <section className="rounded-lg border p-4 text-sm text-gray-600">

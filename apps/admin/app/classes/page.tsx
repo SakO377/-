@@ -4,12 +4,30 @@ import { useEffect, useState, type FormEvent } from "react";
 import AuthGuard from "@/components/AuthGuard";
 import NavBar from "@/components/NavBar";
 import { apiFetch } from "@/lib/api";
-import type { ClassEntity } from "@school-harness/shared";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
+interface ClassRow {
+  id: string;
+  name: string;
+  weekday: number;
+  start_time: string;
+  end_time: string;
+  capacity: number | null;
+  enrolled: number;
+}
+
+function seatsLabel(c: ClassRow): { text: string; alert: boolean } {
+  if (c.capacity == null) return { text: `${c.enrolled}名(定員未設定)`, alert: false };
+  const remaining = c.capacity - c.enrolled;
+  return {
+    text: remaining > 0 ? `空き ${remaining}(${c.enrolled}/${c.capacity})` : `満席(${c.enrolled}/${c.capacity})`,
+    alert: remaining <= 0,
+  };
+}
+
 function ClassesView() {
-  const [classes, setClasses] = useState<ClassEntity[] | null>(null);
+  const [classes, setClasses] = useState<ClassRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
@@ -21,7 +39,7 @@ function ClassesView() {
 
   async function load() {
     try {
-      const res = await apiFetch<{ classes: ClassEntity[] }>("/api/classes");
+      const res = await apiFetch<{ classes: ClassRow[] }>("/api/classes");
       setClasses(res.classes);
     } catch (err) {
       setError(err instanceof Error ? err.message : "読み込みに失敗しました");
@@ -60,28 +78,65 @@ function ClassesView() {
         <p className="mb-6 text-gray-500">まだクラスが登録されていません。</p>
       )}
       {classes && classes.length > 0 && (
-        <table className="mb-6 w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b text-left text-gray-500">
-              <th className="py-2">名称</th>
-              <th className="py-2">曜日</th>
-              <th className="py-2">時間</th>
-              <th className="py-2">定員</th>
-            </tr>
-          </thead>
-          <tbody>
-            {classes.map((c) => (
-              <tr key={c.id} className="border-b">
-                <td className="py-2">{c.name}</td>
-                <td className="py-2">{WEEKDAYS[c.weekday]}</td>
-                <td className="py-2">
-                  {c.start_time} - {c.end_time}
-                </td>
-                <td className="py-2">{c.capacity ?? "-"}</td>
+        <>
+          <table className="mb-6 w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b text-left text-gray-500">
+                <th className="py-2">名称</th>
+                <th className="py-2">曜日</th>
+                <th className="py-2">時間</th>
+                <th className="py-2">在籍 / 定員(空き)</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {classes.map((c) => {
+                const s = seatsLabel(c);
+                return (
+                  <tr key={c.id} className="border-b">
+                    <td className="py-2">{c.name}</td>
+                    <td className="py-2">{WEEKDAYS[c.weekday]}</td>
+                    <td className="py-2">
+                      {c.start_time} - {c.end_time}
+                    </td>
+                    <td className={`py-2 ${s.alert ? "font-semibold text-red-600" : ""}`}>
+                      {s.text}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          <h2 className="mb-2 font-semibold">週間時間割(空き枠)</h2>
+          <div className="mb-6 overflow-x-auto">
+            <div className="grid min-w-[640px] grid-cols-7 gap-2">
+              {WEEKDAYS.map((w, day) => (
+                <div key={w} className="flex flex-col gap-1">
+                  <div className="text-center text-xs font-semibold text-gray-500">{w}</div>
+                  {classes
+                    .filter((c) => c.weekday === day)
+                    .map((c) => {
+                      const s = seatsLabel(c);
+                      return (
+                        <div
+                          key={c.id}
+                          className={`rounded border p-1.5 text-xs ${
+                            s.alert ? "border-red-200 bg-red-50" : "bg-gray-50"
+                          }`}
+                        >
+                          <div className="font-medium">{c.name}</div>
+                          <div className="text-gray-500">
+                            {c.start_time}-{c.end_time}
+                          </div>
+                          <div className={s.alert ? "text-red-600" : "text-green-700"}>{s.text}</div>
+                        </div>
+                      );
+                    })}
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
       )}
 
       <h2 className="mb-2 font-semibold">クラスを追加</h2>

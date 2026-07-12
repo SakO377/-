@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import AuthGuard from "@/components/AuthGuard";
 import NavBar from "@/components/NavBar";
@@ -10,12 +10,52 @@ import type { Student } from "@school-harness/shared";
 function StudentsList() {
   const [students, setStudents] = useState<Student[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  function reload() {
     apiFetch<{ students: Student[] }>("/api/students")
       .then((res) => setStudents(res.students))
       .catch((err) => setError(err instanceof Error ? err.message : "読み込みに失敗しました"));
+  }
+
+  useEffect(() => {
+    reload();
   }, []);
+
+  async function importCsv(file: File) {
+    const text = await file.text();
+    try {
+      const apiKey = getApiKey();
+      const res = await fetch(`${API_BASE_URL}/api/students/import.csv`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/csv",
+          ...(apiKey ? { "X-API-Key": apiKey } : {}),
+        },
+        body: text,
+      });
+      const body = (await res.json()) as {
+        created?: number;
+        errors?: { row: number; reason: string }[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(body.error ?? "取り込みに失敗しました");
+      const errCount = body.errors?.length ?? 0;
+      alert(
+        `${body.created ?? 0} 名を取り込みました。` +
+          (errCount > 0
+            ? `\n取り込めなかった行: ${errCount} 件\n` +
+              body
+                .errors!.slice(0, 10)
+                .map((e) => `${e.row}行目: ${e.reason}`)
+                .join("\n")
+            : "")
+      );
+      reload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "取り込みに失敗しました");
+    }
+  }
 
   async function promoteGrades() {
     if (
@@ -61,6 +101,23 @@ function StudentsList() {
             className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50"
           >
             CSVダウンロード
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) importCsv(file);
+              e.target.value = "";
+            }}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50"
+          >
+            CSVインポート
           </button>
           <Link href="/students/new" className="rounded bg-black px-3 py-1.5 text-sm text-white">
             + 新規登録

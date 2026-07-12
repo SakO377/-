@@ -10,7 +10,25 @@ export default function LoginPage() {
   const [demoEnabled, setDemoEnabled] = useState(false);
   const [demoLoading, setDemoLoading] = useState(false);
   const [demoError, setDemoError] = useState<string | null>(null);
+  const [mode, setMode] = useState<"password" | "apikey">("password");
+  const [creds, setCreds] = useState({ name: "", password: "" });
+  const [loginError, setLoginError] = useState<string | null>(null);
   const router = useRouter();
+
+  async function handlePasswordLogin(e: FormEvent) {
+    e.preventDefault();
+    setLoginError(null);
+    try {
+      const res = await apiFetch<{ api_key: string }>("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ name: creds.name, password: creds.password }),
+      });
+      setApiKey(res.api_key);
+      router.push("/dashboard");
+    } catch (err) {
+      setLoginError(err instanceof Error ? err.message : "ログインに失敗しました");
+    }
+  }
 
   useEffect(() => {
     apiFetch<{ enabled: boolean }>("/api/demo/status")
@@ -65,18 +83,60 @@ export default function LoginPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <input
-          className="rounded border px-3 py-2"
-          placeholder="APIキー"
-          value={key}
-          onChange={(e) => setKey(e.target.value)}
-          required
-        />
-        <button type="submit" className="rounded bg-black px-4 py-2 text-white">
-          ログイン
+      <div className="flex gap-2 text-sm">
+        <button
+          onClick={() => setMode("password")}
+          className={`rounded px-3 py-1 ${mode === "password" ? "bg-black text-white" : "bg-gray-100"}`}
+        >
+          パスワードでログイン
         </button>
-      </form>
+        <button
+          onClick={() => setMode("apikey")}
+          className={`rounded px-3 py-1 ${mode === "apikey" ? "bg-black text-white" : "bg-gray-100"}`}
+        >
+          APIキーでログイン
+        </button>
+      </div>
+
+      {mode === "password" ? (
+        <form onSubmit={handlePasswordLogin} className="flex flex-col gap-3">
+          <input
+            className="rounded border px-3 py-2"
+            placeholder="お名前(登録済みのスタッフ名)"
+            value={creds.name}
+            onChange={(e) => setCreds({ ...creds, name: e.target.value })}
+            required
+          />
+          <input
+            type="password"
+            className="rounded border px-3 py-2"
+            placeholder="パスワード"
+            value={creds.password}
+            onChange={(e) => setCreds({ ...creds, password: e.target.value })}
+            required
+          />
+          <button type="submit" className="rounded bg-black px-4 py-2 text-white">
+            ログイン
+          </button>
+          {loginError && <p className="text-sm text-red-600">{loginError}</p>}
+          <p className="text-xs text-gray-500">
+            パスワードは各スタッフが「設定」画面で登録します。未登録の場合はAPIキーでログインしてください。
+          </p>
+        </form>
+      ) : (
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <input
+            className="rounded border px-3 py-2"
+            placeholder="APIキー"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            required
+          />
+          <button type="submit" className="rounded bg-black px-4 py-2 text-white">
+            ログイン
+          </button>
+        </form>
+      )}
       <p className="text-sm text-gray-500">
         初めての場合は{" "}
         <Link href="/setup" className="text-blue-600 underline">

@@ -27,6 +27,7 @@ const links: { href: string; label: string; badge?: keyof BadgeMap }[] = [
   { href: "/staff", label: "スタッフ" },
   { href: "/shifts", label: "シフト" },
   { href: "/settings", label: "設定" },
+  { href: "/audit", label: "操作ログ" },
 ];
 
 type BadgeMap = { absences: number; reports: number; invoices: number };

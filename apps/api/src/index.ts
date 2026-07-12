@@ -2,7 +2,10 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { Env, Variables } from "./types";
 import setup from "./routes/setup";
+import auth from "./routes/auth";
+import audit from "./routes/audit";
 import demo from "./routes/demo";
+import { generateId } from "./lib/id";
 import dashboard from "./routes/dashboard";
 import staffRoutes from "./routes/staff";
 import students from "./routes/students";
@@ -40,6 +43,27 @@ app.use("*", async (c, next) => {
   return handler(c, next);
 });
 
+// 操作ログ(監査ログ): 認証済みの更新系リクエスト(GET以外)を記録する。
+// requireAuth が staff をセットした後に走らせたいので、next() の後で判定する。
+app.use("/api/*", async (c, next) => {
+  await next();
+  const method = c.req.method;
+  if (method === "GET" || method === "OPTIONS") return;
+  const staff = c.get("staff");
+  if (!staff) return; // 未認証(デモ・ログイン等)は記録しない
+  if (c.res.status >= 400) return;
+  try {
+    const path = new URL(c.req.url).pathname;
+    await c.env.DB.prepare(
+      "INSERT INTO audit_logs (id, staff_id, staff_name, method, path, status) VALUES (?, ?, ?, ?, ?, ?)"
+    )
+      .bind(generateId("audit"), staff.id, staff.name, method, path, c.res.status)
+      .run();
+  } catch (e) {
+    console.error("audit log failed", e);
+  }
+});
+
 app.get("/", (c) =>
   c.json({
     name: "School Harness API",
@@ -58,8 +82,12 @@ app.get("/health", async (c) => {
 // 体験用デモ環境の初期化(DEMO_MODE=true のときのみ有効、APIキー不要)
 app.route("/api/demo", demo);
 
+// 名前+パスワードのログイン(APIキー取得)
+app.route("/api/auth", auth);
+
 // 管理画面向けAPI(要 X-API-Key)
 app.route("/api/setup", setup);
+app.route("/api/audit", audit);
 app.route("/api/dashboard", dashboard);
 app.route("/api/staff", staffRoutes);
 app.route("/api/students", students);

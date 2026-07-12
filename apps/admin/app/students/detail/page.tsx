@@ -32,6 +32,7 @@ interface StudentDetail {
   name: string;
   grade: string | null;
   course: string | null;
+  class_id: string | null;
   status: StudentStatus;
   tags: string[];
   qr_token: string | null;
@@ -392,18 +393,24 @@ function StudentDetailView() {
   const [invite, setInvite] = useState<InviteCodeResult | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [monthlyFeeInput, setMonthlyFeeInput] = useState("");
-  const [basicForm, setBasicForm] = useState({ name: "", grade: "", course: "" });
+  const [basicForm, setBasicForm] = useState({ name: "", grade: "", course: "", class_id: "" });
   const [gradeMode, setGradeMode] = useState<"preset" | typeof GRADE_CUSTOM>("preset");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [basicSaved, setBasicSaved] = useState(false);
+  const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
 
   const load = useCallback(async () => {
     try {
       const res = await apiFetch<StudentDetail>(`/api/students/${studentId}`);
       setStudent(res);
       setMonthlyFeeInput(res.monthly_fee != null ? String(res.monthly_fee) : "");
-      setBasicForm({ name: res.name, grade: res.grade ?? "", course: res.course ?? "" });
+      setBasicForm({
+        name: res.name,
+        grade: res.grade ?? "",
+        course: res.course ?? "",
+        class_id: res.class_id ?? "",
+      });
       setGradeMode(
         res.grade && !GRADE_PRESETS.includes(res.grade) ? GRADE_CUSTOM : "preset"
       );
@@ -412,6 +419,12 @@ function StudentDetailView() {
       setError(err instanceof Error ? err.message : "読み込みに失敗しました");
     }
   }, [studentId]);
+
+  useEffect(() => {
+    apiFetch<{ classes: { id: string; name: string }[] }>("/api/classes")
+      .then((res) => setClasses(res.classes))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     load();
@@ -485,10 +498,18 @@ function StudentDetailView() {
         name: basicForm.name,
         grade: basicForm.grade || null,
         course: basicForm.course || null,
+        class_id: basicForm.class_id || null,
         tags,
       }),
     });
-    setStudent({ ...student, name: res.name, grade: res.grade, course: res.course, tags: res.tags });
+    setStudent({
+      ...student,
+      name: res.name,
+      grade: res.grade,
+      course: res.course,
+      class_id: res.class_id,
+      tags: res.tags,
+    });
     setBasicSaved(true);
   }
 
@@ -567,6 +588,22 @@ function StudentDetailView() {
               value={basicForm.course}
               onChange={(e) => setBasicForm({ ...basicForm, course: e.target.value })}
             />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-sm text-gray-600">所属クラス</label>
+            <select
+              className="rounded border px-3 py-2"
+              value={basicForm.class_id}
+              onChange={(e) => setBasicForm({ ...basicForm, class_id: e.target.value })}
+            >
+              <option value="">未所属</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="flex flex-col gap-1">

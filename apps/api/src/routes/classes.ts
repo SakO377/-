@@ -17,8 +17,13 @@ const classInput = z.object({
 });
 
 classes.get("/", async (c) => {
+  // 在籍生徒数(enrolled)を同時に返し、定員に対する空き枠を管理画面で表示できるようにする
   const { results } = await c.env.DB.prepare(
-    "SELECT * FROM classes ORDER BY weekday, start_time"
+    `SELECT c.*,
+            (SELECT COUNT(*) FROM students s
+              WHERE s.class_id = c.id AND s.status = '在籍') AS enrolled
+     FROM classes c
+     ORDER BY c.weekday, c.start_time`
   ).all();
   return c.json({ classes: results ?? [] });
 });
