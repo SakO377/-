@@ -20,7 +20,9 @@ export function useLiff() {
       try {
         await liff.init({ liffId });
         if (!liff.isLoggedIn()) {
-          liff.login();
+          // 既定では登録済みのエンドポイントURL(トップページ)に戻ってしまうことがあるため、
+          // 現在いたページのURLを明示的に指定してログイン後の戻り先を固定する。
+          liff.login({ redirectUri: window.location.href });
           return;
         }
         setStatus("ready");
