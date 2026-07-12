@@ -5,6 +5,7 @@ import type { Env, Variables } from "../types";
 import { requireAuth } from "../middleware/auth";
 import { generateId, generateInviteCode, generateQrToken } from "../lib/id";
 import { parseJsonArray, parseJsonObject } from "../lib/json";
+import { promoteGrades } from "../lib/grade-promotion";
 
 const students = new Hono<{ Bindings: Env; Variables: Variables }>();
 students.use("*", requireAuth);
@@ -115,6 +116,13 @@ students.post("/", zValidator("json", studentInput), async (c) => {
     .run();
   const row = await c.env.DB.prepare("SELECT * FROM students WHERE id = ?").bind(id).first();
   return c.json(serializeStudentRow(row as Record<string, unknown>), 201);
+});
+
+// 全生徒の学年を手動で一括進級させる(年度替わりの手動実行・確認用)。
+// 自動進級(日本時間4月1日)とは別に、任意のタイミングで実行できる。
+students.post("/promote-grades", async (c) => {
+  const promoted = await promoteGrades(c.env);
+  return c.json({ promoted });
 });
 
 students.get("/:id", async (c) => {

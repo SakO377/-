@@ -15,6 +15,7 @@ import reportTemplates from "./routes/report-templates";
 import reports from "./routes/reports";
 import announcements, { sendAnnouncementNow } from "./routes/announcements";
 import invoices from "./routes/invoices";
+import { promoteGradesIfDue } from "./lib/grade-promotion";
 import lineWebhook from "./routes/line-webhook";
 import liff from "./routes/liff";
 import kiosk from "./routes/kiosk";
@@ -88,6 +89,14 @@ async function scheduled(_event: ScheduledController, env: Env): Promise<void> {
 
   for (const row of results ?? []) {
     await sendAnnouncementNow(env, row);
+  }
+
+  // 年に一度(日本時間4月1日)、在籍生徒の学年を自動で1つ上げる。
+  // 進級処理の失敗が配信処理に影響しないよう、独立して try/catch する。
+  try {
+    await promoteGradesIfDue(env);
+  } catch (err) {
+    console.error("grade promotion failed", err);
   }
 }
 

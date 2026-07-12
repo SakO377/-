@@ -80,6 +80,12 @@ function ReportsView() {
     }));
   }
 
+  async function deleteTemplate(id: string) {
+    if (!window.confirm("このテンプレートを削除しますか?")) return;
+    await apiFetch(`/api/report-templates/${id}`, { method: "DELETE" });
+    load();
+  }
+
   async function createReport(e: FormEvent) {
     e.preventDefault();
     await apiFetch("/api/reports", {
@@ -107,11 +113,25 @@ function ReportsView() {
 
       <section className="mb-8">
         <h2 className="mb-2 font-semibold">テンプレート</h2>
+        <p className="mb-2 text-sm text-gray-500">
+          よく使う定型文を登録しておくと、報告書を書くときにワンタップで本文に差し込めます。
+        </p>
         {templates.length > 0 && (
           <ul className="mb-3 flex flex-wrap gap-2 text-sm">
             {templates.map((t) => (
-              <li key={t.id} className="rounded border px-2 py-1">
-                {t.name}
+              <li key={t.id} className="flex items-center gap-2 rounded border px-2 py-1">
+                <span>
+                  {t.name}
+                  {t.subject ? <span className="text-gray-400"> / {t.subject}</span> : null}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => deleteTemplate(t.id)}
+                  className="text-gray-400 hover:text-red-600"
+                  aria-label={`${t.name}を削除`}
+                >
+                  ×
+                </button>
               </li>
             ))}
           </ul>
@@ -158,18 +178,24 @@ function ReportsView() {
             ))}
           </select>
           {templates.length > 0 && (
-            <select
-              className="rounded border px-3 py-2"
-              value={reportForm.template_id}
-              onChange={(e) => applyTemplate(e.target.value)}
-            >
-              <option value="">テンプレートを選択(任意)</option>
-              {templates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+            <div className="flex flex-col gap-1">
+              <select
+                className="rounded border px-3 py-2"
+                value={reportForm.template_id}
+                onChange={(e) => applyTemplate(e.target.value)}
+              >
+                <option value="">テンプレートを使わない</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                    {t.subject ? ` / ${t.subject}` : ""}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500">
+                選ぶと下の本文に定型文が入ります。そのまま書き換えて使えます。
+              </p>
+            </div>
           )}
           <input
             className="rounded border px-3 py-2"

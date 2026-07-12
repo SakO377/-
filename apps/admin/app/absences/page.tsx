@@ -61,7 +61,24 @@ function AbsencesView() {
 
   return (
     <main className="mx-auto max-w-4xl p-6">
-      <h1 className="mb-4 text-xl font-bold">欠席・振替連絡</h1>
+      <h1 className="mb-2 text-xl font-bold">欠席・振替連絡</h1>
+      <div className="mb-4 rounded-lg border bg-gray-50 p-3 text-sm text-gray-600">
+        <p className="mb-1 font-semibold">振替のすすめ方(3ステップ)</p>
+        <ol className="list-inside list-decimal space-y-0.5">
+          <li>
+            <span className="font-medium text-gray-800">申請</span>
+            :保護者から欠席の連絡が届いた状態。
+          </li>
+          <li>
+            <span className="font-medium text-gray-800">振替提案</span>
+            :別日の候補を入力して「振替日を提案」を押すと、この状態になります。
+          </li>
+          <li>
+            <span className="font-medium text-gray-800">確定</span>
+            :保護者と振替日が合意できたら「確定にする」を押して完了です。
+          </li>
+        </ol>
+      </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       {absences && absences.length === 0 && <p className="text-gray-500">連絡はまだありません。</p>}
       {absences && absences.length > 0 && (
@@ -82,10 +99,15 @@ function AbsencesView() {
                 <td className="py-2">{a.student_name}</td>
                 <td className="py-2">{a.date}</td>
                 <td className="py-2">{a.reason ?? "-"}</td>
-                <td className="py-2">{a.status}</td>
+                <td className="py-2">
+                  <StatusBadge status={a.status} />
+                </td>
                 <td className="py-2">{a.makeup_date ?? "-"}</td>
                 <td className="py-2">
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs text-gray-500">
+                      {a.status === "確定" ? "振替日" : "① 振替日の候補を入力"}
+                    </label>
                     <div className="flex gap-1">
                       <input
                         type="date"
@@ -97,9 +119,9 @@ function AbsencesView() {
                       />
                       <button
                         onClick={() => proposeMakeup(a.id)}
-                        className="rounded border px-2 py-1 text-xs hover:bg-gray-50"
+                        className="whitespace-nowrap rounded border px-2 py-1 text-xs hover:bg-gray-50"
                       >
-                        振替日を提案
+                        {a.status === "申請" ? "② 振替日を提案" : "候補を更新"}
                       </button>
                     </div>
                     {a.status !== "確定" ? (
@@ -107,7 +129,7 @@ function AbsencesView() {
                         onClick={() => confirm(a.id)}
                         className="rounded bg-black px-2 py-1 text-xs text-white"
                       >
-                        確定にする
+                        ③ 確定にする
                       </button>
                     ) : (
                       <button
@@ -125,6 +147,19 @@ function AbsencesView() {
         </table>
       )}
     </main>
+  );
+}
+
+function StatusBadge({ status }: { status: AbsenceStatus }) {
+  const styles: Record<AbsenceStatus, string> = {
+    申請: "bg-yellow-100 text-yellow-800",
+    振替提案: "bg-blue-100 text-blue-800",
+    確定: "bg-green-100 text-green-800",
+  };
+  return (
+    <span className={`inline-block rounded-full px-2 py-0.5 text-xs ${styles[status]}`}>
+      {status}
+    </span>
   );
 }
 

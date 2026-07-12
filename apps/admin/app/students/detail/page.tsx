@@ -1,12 +1,31 @@
 "use client";
 
-import { Suspense, useEffect, useState, useCallback } from "react";
+import { Suspense, useEffect, useState, useCallback, type KeyboardEvent } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import AuthGuard from "@/components/AuthGuard";
 import NavBar from "@/components/NavBar";
 import { apiFetch } from "@/lib/api";
 import type { StudentStatus } from "@school-harness/shared";
+
+const GRADE_PRESETS = [
+  "年少",
+  "年中",
+  "年長",
+  "小1",
+  "小2",
+  "小3",
+  "小4",
+  "小5",
+  "小6",
+  "中1",
+  "中2",
+  "中3",
+  "高1",
+  "高2",
+  "高3",
+];
+const GRADE_CUSTOM = "__custom__";
 
 interface StudentDetail {
   id: string;
@@ -243,12 +262,22 @@ function StudentDetailView() {
   const [invite, setInvite] = useState<InviteCodeResult | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [monthlyFeeInput, setMonthlyFeeInput] = useState("");
+  const [basicForm, setBasicForm] = useState({ name: "", grade: "", course: "" });
+  const [gradeMode, setGradeMode] = useState<"preset" | typeof GRADE_CUSTOM>("preset");
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
+  const [basicSaved, setBasicSaved] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const res = await apiFetch<StudentDetail>(`/api/students/${studentId}`);
       setStudent(res);
       setMonthlyFeeInput(res.monthly_fee != null ? String(res.monthly_fee) : "");
+      setBasicForm({ name: res.name, grade: res.grade ?? "", course: res.course ?? "" });
+      setGradeMode(
+        res.grade && !GRADE_PRESETS.includes(res.grade) ? GRADE_CUSTOM : "preset"
+      );
+      setTags(res.tags);
     } catch (err) {
       setError(err instanceof Error ? err.message : "読み込みに失敗しました");
     }
@@ -300,6 +329,39 @@ function StudentDetailView() {
     setStudent({ ...student, monthly_fee: res.monthly_fee });
   }
 
+  function addTag() {
+    const value = tagInput.trim();
+    if (!value || tags.includes(value)) {
+      setTagInput("");
+      return;
+    }
+    setTags([...tags, value]);
+    setTagInput("");
+  }
+
+  function handleTagKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addTag();
+    }
+  }
+
+  async function saveBasic() {
+    if (!student) return;
+    setBasicSaved(false);
+    const res = await apiFetch<StudentDetail>(`/api/students/${student.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        name: basicForm.name,
+        grade: basicForm.grade || null,
+        course: basicForm.course || null,
+        tags,
+      }),
+    });
+    setStudent({ ...student, name: res.name, grade: res.grade, course: res.course, tags: res.tags });
+    setBasicSaved(true);
+  }
+
   async function regenerateQr() {
     if (!student) return;
     if (
@@ -322,6 +384,112 @@ function StudentDetailView() {
       <p className="mb-4 text-sm text-gray-500">
         {student.grade ?? "-"} / {student.course ?? "-"}
       </p>
+
+      <section className="mb-6">
+        <h2 className="mb-2 font-semibold">基本情報</h2>
+        <div className="flex flex-col gap-3 rounded-lg border p-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-sm text-gray-600">氏名</label>
+            <input
+              className="rounded border px-3 py-2"
+              value={basicForm.name}
+              onChange={(e) => setBasicForm({ ...basicForm, name: e.target.value })}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-sm text-gray-600">学年</label>
+            <select
+              className="rounded border px-3 py-2"
+              value={gradeMode === GRADE_CUSTOM ? GRADE_CUSTOM : basicForm.grade}
+              onChange={(e) => {
+                if (e.target.value === GRADE_CUSTOM) {
+                  setGradeMode(GRADE_CUSTOM);
+                  setBasicForm({ ...basicForm, grade: "" });
+                } else {
+                  setGradeMode("preset");
+                  setBasicForm({ ...basicForm, grade: e.target.value });
+                }
+              }}
+            >
+              <option value="">選択してください</option>
+              {GRADE_PRESETS.map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+              <option value={GRADE_CUSTOM}>その他(自由入力)</option>
+            </select>
+            {gradeMode === GRADE_CUSTOM && (
+              <input
+                className="rounded border px-3 py-2"
+                placeholder="学年を入力(例: 高卒認定クラス)"
+                value={basicForm.grade}
+                onChange={(e) => setBasicForm({ ...basicForm, grade: e.target.value })}
+              />
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-sm text-gray-600">コース</label>
+            <input
+              className="rounded border px-3 py-2"
+              value={basicForm.course}
+              onChange={(e) => setBasicForm({ ...basicForm, course: e.target.value })}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-sm text-gray-600">タグ</label>
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="flex items-center gap-1 rounded-full bg-gray-100 px-2 py-1 text-xs"
+                  >
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={() => setTags(tags.filter((t) => t !== tag))}
+                      className="text-gray-500 hover:text-red-600"
+                      aria-label={`${tag}を削除`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <input
+                className="flex-1 rounded border px-3 py-2 text-sm"
+                placeholder="タグを入力してEnter(例: 兄弟在籍、体験)"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={handleTagKeyDown}
+              />
+              <button
+                type="button"
+                onClick={addTag}
+                className="rounded border px-3 py-2 text-sm hover:bg-gray-50"
+              >
+                追加
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={saveBasic}
+              className="self-start rounded bg-black px-4 py-2 text-sm text-white"
+            >
+              基本情報を保存
+            </button>
+            {basicSaved && <span className="text-sm text-green-600">保存しました</span>}
+          </div>
+        </div>
+      </section>
 
       <section className="mb-6">
         <h2 className="mb-2 font-semibold">ステータス</h2>

@@ -17,6 +17,20 @@ function StudentsList() {
       .catch((err) => setError(err instanceof Error ? err.message : "読み込みに失敗しました"));
   }, []);
 
+  async function promoteGrades() {
+    if (
+      !window.confirm(
+        "在籍・休会の全生徒の学年を1つ上げます(高3など最上位は据え置き)。よろしいですか?\n※毎年4月1日には自動で実行されます。"
+      )
+    )
+      return;
+    const res = await apiFetch<{ promoted: number }>("/api/students/promote-grades", {
+      method: "POST",
+    });
+    alert(`${res.promoted} 名を進級しました。`);
+    apiFetch<{ students: Student[] }>("/api/students").then((r) => setStudents(r.students));
+  }
+
   async function downloadCsv() {
     const apiKey = getApiKey();
     const res = await fetch(`${API_BASE_URL}/api/students/export.csv`, {
@@ -36,6 +50,12 @@ function StudentsList() {
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-bold">生徒一覧</h1>
         <div className="flex gap-2">
+          <button
+            onClick={promoteGrades}
+            className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50"
+          >
+            一括進級
+          </button>
           <button
             onClick={downloadCsv}
             className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50"

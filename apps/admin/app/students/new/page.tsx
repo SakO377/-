@@ -27,7 +27,7 @@ const GRADE_CUSTOM = "__custom__";
 
 function NewStudentForm() {
   const router = useRouter();
-  const [form, setForm] = useState({ name: "", grade: "", course: "" });
+  const [form, setForm] = useState({ name: "", grade: "", course: "", monthlyFee: "" });
   const [gradeMode, setGradeMode] = useState<"preset" | typeof GRADE_CUSTOM>("preset");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
@@ -66,6 +66,7 @@ function NewStudentForm() {
           name: form.name,
           grade: form.grade || null,
           course: form.course || null,
+          monthly_fee: form.monthlyFee === "" ? null : Number(form.monthlyFee),
           tags,
         }),
       });
@@ -128,6 +129,25 @@ function NewStudentForm() {
           value={form.course}
           onChange={(e) => setForm({ ...form, course: e.target.value })}
         />
+
+        <div className="flex flex-col gap-1">
+          <label className="text-sm text-gray-600">月謝(税込)</label>
+          <div className="flex items-center gap-2">
+            <span>¥</span>
+            <input
+              type="number"
+              step="100"
+              min="0"
+              className="w-40 rounded border px-3 py-2"
+              placeholder="例: 8800"
+              value={form.monthlyFee}
+              onChange={(e) => setForm({ ...form, monthlyFee: e.target.value })}
+            />
+          </div>
+          <p className="text-xs text-gray-500">
+            請求書作成時にこの金額が「月謝」項目として自動入力されます(あとから変更できます)。
+          </p>
+        </div>
 
         <div className="flex flex-col gap-1">
           <label className="text-sm text-gray-600">タグ</label>

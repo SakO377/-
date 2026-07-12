@@ -125,6 +125,19 @@ announcements.get("/:id", async (c) => {
   return c.json({ ...row, segment: parseJsonObject(row.segment as string), read_count: readCount?.count ?? 0 });
 });
 
+// 予約配信の取り消し。まだ送信していないお知らせのみ削除できる
+// (送信済みは配信履歴として残す)。
+announcements.delete("/:id", async (c) => {
+  const id = c.req.param("id");
+  const row = await c.env.DB.prepare("SELECT sent_at FROM announcements WHERE id = ?")
+    .bind(id)
+    .first<{ sent_at: string | null }>();
+  if (!row) return c.json({ error: "Not found" }, 404);
+  if (row.sent_at) return c.json({ error: "送信済みのお知らせは取り消せません" }, 409);
+  await c.env.DB.prepare("DELETE FROM announcements WHERE id = ?").bind(id).run();
+  return c.body(null, 204);
+});
+
 announcements.post("/:id/send", async (c) => {
   const id = c.req.param("id");
   const row = await c.env.DB.prepare("SELECT * FROM announcements WHERE id = ?")
