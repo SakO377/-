@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useLiff } from "@/lib/useLiff";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, ApiError } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
+import NotLinkedNotice from "@/components/NotLinkedNotice";
 import type { AbsenceStatus } from "@school-harness/shared";
 
 interface GuardianStudent {
@@ -20,12 +21,19 @@ interface AbsenceRow {
   makeup_date: string | null;
 }
 
-export default function AbsencesContent({ onBack }: { onBack: () => void }) {
+export default function AbsencesContent({
+  onBack,
+  onGoToLink,
+}: {
+  onBack: () => void;
+  onGoToLink: () => void;
+}) {
   const { status, error: liffError, liff } = useLiff();
   const [students, setStudents] = useState<GuardianStudent[]>([]);
   const [absences, setAbsences] = useState<AbsenceRow[]>([]);
   const [form, setForm] = useState({ student_id: "", date: "", reason: "" });
   const [error, setError] = useState<string | null>(null);
+  const [notLinked, setNotLinked] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const authHeader = useCallback((): Record<string, string> => {
@@ -45,6 +53,10 @@ export default function AbsencesContent({ onBack }: { onBack: () => void }) {
       });
       setAbsences(res.absences);
     } catch (err) {
+      if (err instanceof ApiError && (err.status === 404 || err.status === 401)) {
+        setNotLinked(true);
+        return;
+      }
       setError(err instanceof Error ? err.message : "読み込みに失敗しました");
     }
   }, [authHeader]);
@@ -86,6 +98,14 @@ export default function AbsencesContent({ onBack }: { onBack: () => void }) {
   }
   if (status === "error") {
     return <p className="text-center text-red-600">{liffError}</p>;
+  }
+  if (notLinked) {
+    return (
+      <div>
+        <PageHeader title="欠席・振替連絡" onBack={onBack} />
+        <NotLinkedNotice onGoToLink={onGoToLink} />
+      </div>
+    );
   }
 
   return (

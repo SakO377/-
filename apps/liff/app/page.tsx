@@ -18,11 +18,13 @@ function AppShell() {
   const initialCode = searchParams.get("code") ?? "";
 
   const goHome = () => setView("home");
+  const goToLink = () => setView("link");
 
-  if (view === "absences") return <AbsencesContent onBack={goHome} />;
-  if (view === "reports") return <ReportsContent onBack={goHome} />;
-  if (view === "announcements") return <AnnouncementsContent onBack={goHome} />;
-  if (view === "invoices") return <InvoicesContent onBack={goHome} />;
+  if (view === "absences") return <AbsencesContent onBack={goHome} onGoToLink={goToLink} />;
+  if (view === "reports") return <ReportsContent onBack={goHome} onGoToLink={goToLink} />;
+  if (view === "announcements")
+    return <AnnouncementsContent onBack={goHome} onGoToLink={goToLink} />;
+  if (view === "invoices") return <InvoicesContent onBack={goHome} onGoToLink={goToLink} />;
   if (view === "link") return <LinkContent initialCode={initialCode} onBack={goHome} />;
 
   return (

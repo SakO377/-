@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useLiff } from "@/lib/useLiff";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, ApiError } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
+import NotLinkedNotice from "@/components/NotLinkedNotice";
 
 interface ReportRow {
   id: string;
@@ -13,10 +14,17 @@ interface ReportRow {
   read_at: string | null;
 }
 
-export default function ReportsContent({ onBack }: { onBack: () => void }) {
+export default function ReportsContent({
+  onBack,
+  onGoToLink,
+}: {
+  onBack: () => void;
+  onGoToLink: () => void;
+}) {
   const { status, error: liffError, liff } = useLiff();
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [notLinked, setNotLinked] = useState(false);
 
   const authHeader = useCallback((): Record<string, string> => {
     const idToken = liff.getIDToken();
@@ -30,6 +38,10 @@ export default function ReportsContent({ onBack }: { onBack: () => void }) {
       });
       setReports(res.reports);
     } catch (err) {
+      if (err instanceof ApiError && (err.status === 404 || err.status === 401)) {
+        setNotLinked(true);
+        return;
+      }
       setError(err instanceof Error ? err.message : "読み込みに失敗しました");
     }
   }, [authHeader]);
@@ -45,6 +57,14 @@ export default function ReportsContent({ onBack }: { onBack: () => void }) {
 
   if (status === "initializing") return <p className="text-center text-gray-500">読み込み中...</p>;
   if (status === "error") return <p className="text-center text-red-600">{liffError}</p>;
+  if (notLinked) {
+    return (
+      <div>
+        <PageHeader title="指導報告書" onBack={onBack} />
+        <NotLinkedNotice onGoToLink={onGoToLink} />
+      </div>
+    );
+  }
 
   return (
     <div>
