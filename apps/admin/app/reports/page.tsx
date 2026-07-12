@@ -23,10 +23,17 @@ interface ReportRow {
   created_at: string;
 }
 
+interface MissingStudent {
+  id: string;
+  name: string;
+  grade: string | null;
+}
+
 function ReportsView() {
   const [students, setStudents] = useState<Student[]>([]);
   const [templates, setTemplates] = useState<ReportTemplate[]>([]);
   const [reports, setReports] = useState<ReportRow[]>([]);
+  const [missing, setMissing] = useState<MissingStudent[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const [templateForm, setTemplateForm] = useState({ name: "", subject: "", body_template: "" });
@@ -39,14 +46,16 @@ function ReportsView() {
 
   async function load() {
     try {
-      const [studentsRes, templatesRes, reportsRes] = await Promise.all([
+      const [studentsRes, templatesRes, reportsRes, missingRes] = await Promise.all([
         apiFetch<{ students: Student[] }>("/api/students"),
         apiFetch<{ report_templates: ReportTemplate[] }>("/api/report-templates"),
         apiFetch<{ reports: ReportRow[] }>("/api/reports"),
+        apiFetch<{ students: MissingStudent[] }>("/api/dashboard/reports-missing"),
       ]);
       setStudents(studentsRes.students);
       setTemplates(templatesRes.report_templates);
       setReports(reportsRes.reports);
+      setMissing(missingRes.students);
       setReportForm((f) => (f.student_id ? f : { ...f, student_id: studentsRes.students[0]?.id ?? "" }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "読み込みに失敗しました");
@@ -110,6 +119,29 @@ function ReportsView() {
     <main className="mx-auto max-w-3xl p-6">
       <h1 className="mb-4 text-xl font-bold">指導報告書</h1>
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {missing.length > 0 && (
+        <section className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+          <h2 className="mb-1 font-semibold text-amber-900">
+            今月まだ報告書がない生徒({missing.length}名)
+          </h2>
+          <p className="mb-2 text-sm text-amber-800">
+            名前をタップすると、下の作成フォームにその生徒がセットされます。
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {missing.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => setReportForm((f) => ({ ...f, student_id: m.id }))}
+                className="rounded-full border border-amber-300 bg-white px-2 py-1 text-xs hover:bg-amber-100"
+              >
+                {m.name}
+                {m.grade ? <span className="text-gray-400"> {m.grade}</span> : null}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="mb-8">
         <h2 className="mb-2 font-semibold">テンプレート</h2>

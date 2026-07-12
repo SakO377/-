@@ -59,6 +59,14 @@ function AbsencesView() {
     load();
   }
 
+  async function markAbsentOnly(id: string) {
+    await apiFetch(`/api/absences/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "欠席のみ", makeup_date: null }),
+    });
+    load();
+  }
+
   return (
     <main className="mx-auto max-w-4xl p-6">
       <h1 className="mb-2 text-xl font-bold">欠席・振替連絡</h1>
@@ -78,6 +86,9 @@ function AbsencesView() {
             :保護者と振替日が合意できたら「確定にする」を押して完了です。
           </li>
         </ol>
+        <p className="mt-2 text-gray-500">
+          振替をしない場合は「欠席のみ(振替なし)」を押せば、そのまま記録して完了できます。
+        </p>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       {absences && absences.length === 0 && <p className="text-gray-500">連絡はまだありません。</p>}
@@ -104,42 +115,46 @@ function AbsencesView() {
                 </td>
                 <td className="py-2">{a.makeup_date ?? "-"}</td>
                 <td className="py-2">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs text-gray-500">
-                      {a.status === "確定" ? "振替日" : "① 振替日の候補を入力"}
-                    </label>
-                    <div className="flex gap-1">
-                      <input
-                        type="date"
-                        className="rounded border px-2 py-1 text-xs"
-                        value={makeupDrafts[a.id] ?? a.makeup_date ?? ""}
-                        onChange={(e) =>
-                          setMakeupDrafts({ ...makeupDrafts, [a.id]: e.target.value })
-                        }
-                      />
-                      <button
-                        onClick={() => proposeMakeup(a.id)}
-                        className="whitespace-nowrap rounded border px-2 py-1 text-xs hover:bg-gray-50"
-                      >
-                        {a.status === "申請" ? "② 振替日を提案" : "候補を更新"}
-                      </button>
-                    </div>
-                    {a.status !== "確定" ? (
+                  {a.status === "確定" || a.status === "欠席のみ" ? (
+                    <button
+                      onClick={() => reopen(a.id)}
+                      className="rounded border px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                    >
+                      {a.status === "確定" ? "確定を取り消す" : "取り消す"}
+                    </button>
+                  ) : (
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs text-gray-500">① 振替日の候補を入力</label>
+                      <div className="flex gap-1">
+                        <input
+                          type="date"
+                          className="rounded border px-2 py-1 text-xs"
+                          value={makeupDrafts[a.id] ?? a.makeup_date ?? ""}
+                          onChange={(e) =>
+                            setMakeupDrafts({ ...makeupDrafts, [a.id]: e.target.value })
+                          }
+                        />
+                        <button
+                          onClick={() => proposeMakeup(a.id)}
+                          className="whitespace-nowrap rounded border px-2 py-1 text-xs hover:bg-gray-50"
+                        >
+                          {a.status === "申請" ? "② 振替日を提案" : "候補を更新"}
+                        </button>
+                      </div>
                       <button
                         onClick={() => confirm(a.id)}
                         className="rounded bg-black px-2 py-1 text-xs text-white"
                       >
                         ③ 確定にする
                       </button>
-                    ) : (
                       <button
-                        onClick={() => reopen(a.id)}
+                        onClick={() => markAbsentOnly(a.id)}
                         className="rounded border px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
                       >
-                        確定を取り消す
+                        欠席のみ(振替なし)
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
@@ -154,6 +169,7 @@ function StatusBadge({ status }: { status: AbsenceStatus }) {
   const styles: Record<AbsenceStatus, string> = {
     申請: "bg-yellow-100 text-yellow-800",
     振替提案: "bg-blue-100 text-blue-800",
+    欠席のみ: "bg-gray-200 text-gray-700",
     確定: "bg-green-100 text-green-800",
   };
   return (

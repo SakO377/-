@@ -29,9 +29,11 @@ dashboard.get("/", async (c) => {
          FROM attendance_logs WHERE date(timestamp) = date('now')`
       )
       .first<{ check_in: number | null; check_out: number | null }>(),
-    db.prepare("SELECT COUNT(*) AS count FROM absence_requests WHERE status != '確定'").first<{
-      count: number;
-    }>(),
+    db
+      .prepare("SELECT COUNT(*) AS count FROM absence_requests WHERE status IN ('申請', '振替提案')")
+      .first<{
+        count: number;
+      }>(),
     db.prepare("SELECT COUNT(*) AS count FROM reports WHERE sent_at IS NULL").first<{
       count: number;
     }>(),
@@ -107,6 +109,21 @@ dashboard.get("/revenue", async (c) => {
   });
 
   return c.json({ projected_monthly: projected?.total ?? 0, months: series });
+});
+
+// 今月まだ指導報告書を作成していない在籍生徒(定期報告の抜け漏れ防止)。
+dashboard.get("/reports-missing", async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT s.id, s.name, s.grade FROM students s
+     WHERE s.status = '在籍'
+       AND NOT EXISTS (
+         SELECT 1 FROM reports r
+         WHERE r.student_id = s.id
+           AND strftime('%Y-%m', r.created_at) = strftime('%Y-%m', 'now', '+9 hours')
+       )
+     ORDER BY s.created_at`
+  ).all<{ id: string; name: string; grade: string | null }>();
+  return c.json({ students: results ?? [], count: (results ?? []).length });
 });
 
 // 離脱リスクのある在籍生徒を検知する(継続率アラート)。

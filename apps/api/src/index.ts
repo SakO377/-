@@ -15,6 +15,10 @@ import reportTemplates from "./routes/report-templates";
 import reports from "./routes/reports";
 import announcements, { sendAnnouncementNow } from "./routes/announcements";
 import invoices from "./routes/invoices";
+import trials from "./routes/trials";
+import grades from "./routes/grades";
+import shifts from "./routes/shifts";
+import referrals from "./routes/referrals";
 import { promoteGradesIfDue } from "./lib/grade-promotion";
 import lineWebhook from "./routes/line-webhook";
 import liff from "./routes/liff";
@@ -68,6 +72,10 @@ app.route("/api/report-templates", reportTemplates);
 app.route("/api/reports", reports);
 app.route("/api/announcements", announcements);
 app.route("/api/invoices", invoices);
+app.route("/api/trials", trials);
+app.route("/api/grades", grades);
+app.route("/api/shifts", shifts);
+app.route("/api/referrals", referrals);
 
 // LINE Messaging API Webhook(署名検証あり、APIキー不要)
 app.route("/line", lineWebhook);

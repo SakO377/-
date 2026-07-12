@@ -55,7 +55,7 @@ absences.post("/", zValidator("json", absenceInput), async (c) => {
 });
 
 const absenceUpdate = z.object({
-  status: z.enum(["申請", "振替提案", "確定"]).optional(),
+  status: z.enum(["申請", "振替提案", "確定", "欠席のみ"]).optional(),
   makeup_date: z.string().nullable().optional(),
 });
 

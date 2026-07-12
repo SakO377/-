@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState, useCallback, type KeyboardEvent } from "react";
+import { Suspense, useEffect, useState, useCallback, type KeyboardEvent, type FormEvent } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import AuthGuard from "@/components/AuthGuard";
@@ -47,6 +47,16 @@ interface StudentDetail {
 interface InviteCodeResult {
   code: string;
   expires_at: string;
+}
+
+interface GradeRow {
+  id: string;
+  subject: string | null;
+  exam_name: string;
+  date: string | null;
+  score: number | null;
+  max_score: number | null;
+  note: string | null;
 }
 
 const STATUSES: StudentStatus[] = ["在籍", "休会", "退会"];
@@ -248,6 +258,126 @@ function HistoryTabs({ studentId }: { studentId: string }) {
             </table>
           )}
         </>
+      )}
+    </section>
+  );
+}
+
+function GradesSection({ studentId }: { studentId: string }) {
+  const [grades, setGrades] = useState<GradeRow[] | null>(null);
+  const [form, setForm] = useState({ exam_name: "", subject: "", date: "", score: "", max_score: "" });
+
+  const loadGrades = useCallback(() => {
+    apiFetch<{ grades: GradeRow[] }>(`/api/grades?student_id=${encodeURIComponent(studentId)}`).then(
+      (res) => setGrades(res.grades)
+    );
+  }, [studentId]);
+
+  useEffect(() => {
+    loadGrades();
+  }, [loadGrades]);
+
+  async function addGrade(e: FormEvent) {
+    e.preventDefault();
+    await apiFetch("/api/grades", {
+      method: "POST",
+      body: JSON.stringify({
+        student_id: studentId,
+        exam_name: form.exam_name,
+        subject: form.subject || null,
+        date: form.date || null,
+        score: form.score === "" ? null : Number(form.score),
+        max_score: form.max_score === "" ? null : Number(form.max_score),
+      }),
+    });
+    setForm({ exam_name: "", subject: "", date: "", score: "", max_score: "" });
+    loadGrades();
+  }
+
+  async function deleteGrade(id: string) {
+    await apiFetch(`/api/grades/${id}`, { method: "DELETE" });
+    loadGrades();
+  }
+
+  return (
+    <section className="mb-6">
+      <h2 className="mb-2 font-semibold">成績</h2>
+      <form onSubmit={addGrade} className="mb-3 flex flex-wrap gap-2">
+        <input
+          className="rounded border px-2 py-1 text-sm"
+          placeholder="テスト名(例: 中間テスト)"
+          value={form.exam_name}
+          onChange={(e) => setForm({ ...form, exam_name: e.target.value })}
+          required
+        />
+        <input
+          className="w-24 rounded border px-2 py-1 text-sm"
+          placeholder="教科"
+          value={form.subject}
+          onChange={(e) => setForm({ ...form, subject: e.target.value })}
+        />
+        <input
+          type="date"
+          className="rounded border px-2 py-1 text-sm"
+          value={form.date}
+          onChange={(e) => setForm({ ...form, date: e.target.value })}
+        />
+        <input
+          type="number"
+          className="w-20 rounded border px-2 py-1 text-sm"
+          placeholder="点数"
+          value={form.score}
+          onChange={(e) => setForm({ ...form, score: e.target.value })}
+        />
+        <span className="self-center text-sm text-gray-400">/</span>
+        <input
+          type="number"
+          className="w-20 rounded border px-2 py-1 text-sm"
+          placeholder="満点"
+          value={form.max_score}
+          onChange={(e) => setForm({ ...form, max_score: e.target.value })}
+        />
+        <button type="submit" className="rounded border px-3 py-1 text-sm hover:bg-gray-50">
+          記録
+        </button>
+      </form>
+      {grades === null ? (
+        <p className="text-sm text-gray-500">読み込み中...</p>
+      ) : grades.length === 0 ? (
+        <p className="text-sm text-gray-500">まだ成績の記録はありません。</p>
+      ) : (
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b text-left text-gray-500">
+              <th className="py-1.5">日付</th>
+              <th className="py-1.5">テスト</th>
+              <th className="py-1.5">教科</th>
+              <th className="py-1.5">点数</th>
+              <th className="py-1.5"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {grades.map((g) => (
+              <tr key={g.id} className="border-b">
+                <td className="py-1.5">{g.date ?? "-"}</td>
+                <td className="py-1.5">{g.exam_name}</td>
+                <td className="py-1.5">{g.subject ?? "-"}</td>
+                <td className="py-1.5">
+                  {g.score != null ? g.score : "-"}
+                  {g.max_score != null ? ` / ${g.max_score}` : ""}
+                </td>
+                <td className="py-1.5 text-right">
+                  <button
+                    onClick={() => deleteGrade(g.id)}
+                    className="text-xs text-red-600 hover:underline"
+                  >
+                    削除
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </section>
   );
@@ -584,6 +714,8 @@ function StudentDetailView() {
           印刷してカードにし、教室のQRリーダー画面(<code>/kiosk</code>)で読み取ってもらってください。
         </p>
       </section>
+
+      <GradesSection studentId={student.id} />
 
       <HistoryTabs studentId={student.id} />
 
