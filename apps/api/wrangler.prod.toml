@@ -14,7 +14,7 @@ migrations_dir = "migrations"
 LINE_FREE_PUSH_QUOTA = "200"
 # LINE Login (LIFF) チャネルID。LIFFのIDトークン検証(audience)に使用する。
 # LINE Developers で LINEログインチャネルを作成し、そのチャネルIDに置き換える。
-LIFF_CHANNEL_ID = "REPLACE_WITH_YOUR_LINE_LOGIN_CHANNEL_ID"
+LIFF_CHANNEL_ID = "2010677068"
 # CORSで許可するオリジン。本番管理画面・LIFFのURLに絞る。
 ALLOWED_ORIGINS = "https://school-harness-prod-admin.pages.dev,https://school-harness-prod-liff.pages.dev"
 # 本番では必ず "false"(見本データ投入エンドポイントを無効化)。
