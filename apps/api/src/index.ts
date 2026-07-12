@@ -43,6 +43,22 @@ app.use("*", async (c, next) => {
   return handler(c, next);
 });
 
+// アクセス元制限: ADMIN_IP_ALLOWLIST が設定されている場合、許可IP以外からの
+// 管理API(/api/*)を拒否する。体験用デモ(/api/demo)は誰でも触れるよう対象外。
+app.use("/api/*", async (c, next) => {
+  const allowlist = (c.env.ADMIN_IP_ALLOWLIST ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (allowlist.length === 0) return next();
+  if (c.req.path.startsWith("/api/demo")) return next();
+  const ip = c.req.header("CF-Connecting-IP") ?? "";
+  if (!allowlist.includes(ip)) {
+    return c.json({ error: "この場所からのアクセスは許可されていません" }, 403);
+  }
+  return next();
+});
+
 // 操作ログ(監査ログ): 認証済みの更新系リクエスト(GET以外)を記録する。
 // requireAuth が staff をセットした後に走らせたいので、next() の後で判定する。
 app.use("/api/*", async (c, next) => {

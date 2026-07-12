@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import QRCode from "qrcode";
 import AuthGuard from "@/components/AuthGuard";
 import NavBar from "@/components/NavBar";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, setApiKey } from "@/lib/api";
 
 interface SettingsData {
   attendance_push_enabled: boolean;
@@ -19,6 +20,71 @@ function SettingsView() {
   const [saved, setSaved] = useState(false);
   const [password, setPassword] = useState("");
   const [pwMessage, setPwMessage] = useState<string | null>(null);
+
+  // 2段階認証
+  const [totpEnabled, setTotpEnabled] = useState<boolean | null>(null);
+  const [totpSetup, setTotpSetup] = useState<{ secret: string; qr: string } | null>(null);
+  const [totpCode, setTotpCode] = useState("");
+  const [totpMessage, setTotpMessage] = useState<string | null>(null);
+  const [disablePassword, setDisablePassword] = useState("");
+
+  useEffect(() => {
+    apiFetch<{ enabled: boolean }>("/api/auth/totp/status")
+      .then((r) => setTotpEnabled(r.enabled))
+      .catch(() => setTotpEnabled(false));
+  }, []);
+
+  async function startTotpSetup() {
+    setTotpMessage(null);
+    const res = await apiFetch<{ secret: string; otpauth_uri: string }>("/api/auth/totp/setup", {
+      method: "POST",
+    });
+    const qr = await QRCode.toDataURL(res.otpauth_uri, { width: 180 });
+    setTotpSetup({ secret: res.secret, qr });
+  }
+
+  async function enableTotp() {
+    setTotpMessage(null);
+    try {
+      await apiFetch("/api/auth/totp/enable", {
+        method: "POST",
+        body: JSON.stringify({ code: totpCode.trim() }),
+      });
+      setTotpEnabled(true);
+      setTotpSetup(null);
+      setTotpCode("");
+      setTotpMessage("2段階認証を有効にしました。次回ログインからコードが必要です。");
+    } catch (err) {
+      setTotpMessage(err instanceof Error ? err.message : "有効化に失敗しました");
+    }
+  }
+
+  async function disableTotp() {
+    setTotpMessage(null);
+    try {
+      await apiFetch("/api/auth/totp/disable", {
+        method: "POST",
+        body: JSON.stringify({ password: disablePassword }),
+      });
+      setTotpEnabled(false);
+      setDisablePassword("");
+      setTotpMessage("2段階認証を無効にしました。");
+    } catch (err) {
+      setTotpMessage(err instanceof Error ? err.message : "無効化に失敗しました");
+    }
+  }
+
+  async function rotateKey() {
+    if (
+      !window.confirm(
+        "現在のAPIキーを無効化し、新しいキーを発行します。他の端末でこのキーを使っている場合は再ログインが必要です。続けますか?"
+      )
+    )
+      return;
+    const res = await apiFetch<{ api_key: string }>("/api/auth/rotate-key", { method: "POST" });
+    setApiKey(res.api_key);
+    window.alert(`新しいAPIキー:\n${res.api_key}\n\nこの端末には自動で保存しました。安全に控えてください。`);
+  }
 
   async function savePassword() {
     setPwMessage(null);
@@ -141,6 +207,75 @@ function SettingsView() {
           </button>
         </div>
         {pwMessage && <p className="mt-2 text-sm text-gray-700">{pwMessage}</p>}
+      </section>
+
+      <section className="mb-6 rounded-lg border p-4">
+        <h2 className="mb-2 font-semibold">
+          2段階認証(2FA){" "}
+          {totpEnabled === true && <span className="text-sm text-green-600">有効</span>}
+          {totpEnabled === false && <span className="text-sm text-gray-400">未設定</span>}
+        </h2>
+        <p className="mb-3 text-sm text-gray-500">
+          Google Authenticator などの認証アプリを使い、ログイン時にワンタイムコードを要求します。
+          責任者は有効化を推奨します(パスワード設定後に利用できます)。
+        </p>
+
+        {totpEnabled === false && !totpSetup && (
+          <button onClick={startTotpSetup} className="rounded bg-black px-3 py-2 text-sm text-white">
+            2段階認証を設定する
+          </button>
+        )}
+
+        {totpSetup && (
+          <div className="flex flex-col gap-2">
+            <p className="text-sm text-gray-600">
+              認証アプリでQRコードを読み取るか、キーを手入力してください。
+            </p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={totpSetup.qr} alt="2FA QRコード" width={160} height={160} />
+            <code className="text-xs break-all text-gray-500">{totpSetup.secret}</code>
+            <div className="flex items-center gap-2">
+              <input
+                className="w-32 rounded border px-3 py-2 text-sm"
+                placeholder="6桁コード"
+                value={totpCode}
+                onChange={(e) => setTotpCode(e.target.value)}
+              />
+              <button onClick={enableTotp} className="rounded bg-black px-3 py-2 text-sm text-white">
+                有効にする
+              </button>
+            </div>
+          </div>
+        )}
+
+        {totpEnabled === true && (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="password"
+              className="rounded border px-3 py-2 text-sm"
+              placeholder="パスワード(確認用)"
+              value={disablePassword}
+              onChange={(e) => setDisablePassword(e.target.value)}
+            />
+            <button
+              onClick={disableTotp}
+              className="rounded border px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+            >
+              2段階認証を無効にする
+            </button>
+          </div>
+        )}
+        {totpMessage && <p className="mt-2 text-sm text-gray-700">{totpMessage}</p>}
+      </section>
+
+      <section className="mb-6 rounded-lg border p-4">
+        <h2 className="mb-2 font-semibold">APIキーの再発行</h2>
+        <p className="mb-2 text-sm text-gray-500">
+          APIキーが漏れた恐れがあるときは、再発行すると古いキーは使えなくなります。
+        </p>
+        <button onClick={rotateKey} className="rounded border px-3 py-2 text-sm hover:bg-gray-50">
+          APIキーを再発行する
+        </button>
       </section>
 
       <section className="rounded-lg border p-4 text-sm text-gray-600">

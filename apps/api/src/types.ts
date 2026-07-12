@@ -11,6 +11,12 @@ export interface Env {
   ALLOWED_ORIGINS?: string;
   /** "true" のときだけ /api/demo/session を有効化する(体験用デモ環境専用)。 */
   DEMO_MODE?: string;
+  /**
+   * 管理APIへアクセスできる送信元IPの許可リスト(カンマ区切り)。
+   * 未設定/空 なら制限なし。設定すると、リストにないIPからの /api/* は 403 になる
+   * (体験用デモの /api/demo は対象外)。
+   */
+  ADMIN_IP_ALLOWLIST?: string;
 }
 
 export interface AuthedStaff {
