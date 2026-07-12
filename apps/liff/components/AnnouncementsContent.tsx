@@ -5,17 +5,16 @@ import { useLiff } from "@/lib/useLiff";
 import { apiFetch } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
 
-interface ReportRow {
+interface AnnouncementRow {
   id: string;
-  student_name: string;
-  author: string | null;
+  title: string;
   body: string;
   read_at: string | null;
 }
 
-function ReportsContent() {
+export default function AnnouncementsContent({ onBack }: { onBack: () => void }) {
   const { status, error: liffError, liff } = useLiff();
-  const [reports, setReports] = useState<ReportRow[]>([]);
+  const [announcements, setAnnouncements] = useState<AnnouncementRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const authHeader = useCallback((): Record<string, string> => {
@@ -25,10 +24,10 @@ function ReportsContent() {
 
   const load = useCallback(async () => {
     try {
-      const res = await apiFetch<{ reports: ReportRow[] }>("/liff/reports", {
+      const res = await apiFetch<{ announcements: AnnouncementRow[] }>("/liff/announcements", {
         headers: authHeader(),
       });
-      setReports(res.reports);
+      setAnnouncements(res.announcements);
     } catch (err) {
       setError(err instanceof Error ? err.message : "読み込みに失敗しました");
     }
@@ -39,7 +38,7 @@ function ReportsContent() {
   }, [status, load]);
 
   async function markRead(id: string) {
-    await apiFetch(`/liff/reports/${id}/read`, { method: "POST", headers: authHeader() });
+    await apiFetch(`/liff/announcements/${id}/read`, { method: "POST", headers: authHeader() });
     load();
   }
 
@@ -48,33 +47,22 @@ function ReportsContent() {
 
   return (
     <div>
-      <PageHeader title="指導報告書" />
+      <PageHeader title="お知らせ" onBack={onBack} />
       {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
-      {reports.length === 0 && <p className="text-sm text-gray-500">まだ報告書はありません。</p>}
+      {announcements.length === 0 && <p className="text-sm text-gray-500">お知らせはまだありません。</p>}
       <ul className="flex flex-col gap-3">
-        {reports.map((r) => (
+        {announcements.map((a) => (
           <li
-            key={r.id}
-            onClick={() => !r.read_at && markRead(r.id)}
+            key={a.id}
+            onClick={() => !a.read_at && markRead(a.id)}
             className="rounded border p-3 text-sm"
           >
-            <p className="font-semibold">
-              {r.student_name}
-              {r.author ? ` / ${r.author}` : ""}
-            </p>
-            <p className="mt-1 whitespace-pre-wrap">{r.body}</p>
-            <p className="mt-1 text-xs text-gray-500">{r.read_at ? "既読" : "未読(タップで既読)"}</p>
+            <p className="font-semibold">{a.title}</p>
+            <p className="mt-1 whitespace-pre-wrap">{a.body}</p>
+            <p className="mt-1 text-xs text-gray-500">{a.read_at ? "既読" : "未読(タップで既読)"}</p>
           </li>
         ))}
       </ul>
     </div>
-  );
-}
-
-export default function ReportsPage() {
-  return (
-    <main className="mx-auto min-h-screen max-w-md p-6">
-      <ReportsContent />
-    </main>
   );
 }

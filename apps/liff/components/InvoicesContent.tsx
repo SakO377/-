@@ -13,7 +13,7 @@ interface InvoiceRow {
   paid_status: string;
 }
 
-function InvoicesContent() {
+export default function InvoicesContent({ onBack }: { onBack: () => void }) {
   const { status, error: liffError, liff } = useLiff();
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +51,7 @@ function InvoicesContent() {
 
   return (
     <div>
-      <PageHeader title="請求書" />
+      <PageHeader title="請求書" onBack={onBack} />
       {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
       {invoices.length === 0 && <p className="text-sm text-gray-500">請求書はまだありません。</p>}
       <ul className="flex flex-col gap-3">
@@ -73,13 +73,5 @@ function InvoicesContent() {
         ))}
       </ul>
     </div>
-  );
-}
-
-export default function InvoicesPage() {
-  return (
-    <main className="mx-auto min-h-screen max-w-md p-6">
-      <InvoicesContent />
-    </main>
   );
 }

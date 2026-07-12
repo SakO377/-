@@ -20,7 +20,7 @@ interface AbsenceRow {
   makeup_date: string | null;
 }
 
-function AbsencesContent() {
+export default function AbsencesContent({ onBack }: { onBack: () => void }) {
   const { status, error: liffError, liff } = useLiff();
   const [students, setStudents] = useState<GuardianStudent[]>([]);
   const [absences, setAbsences] = useState<AbsenceRow[]>([]);
@@ -91,7 +91,7 @@ function AbsencesContent() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <PageHeader title="欠席・振替連絡" />
+        <PageHeader title="欠席・振替連絡" onBack={onBack} />
         {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
         {students.length === 0 ? (
           <p className="text-sm text-gray-500">
@@ -159,13 +159,5 @@ function AbsencesContent() {
         </div>
       )}
     </div>
-  );
-}
-
-export default function AbsencesPage() {
-  return (
-    <main className="mx-auto min-h-screen max-w-md p-6">
-      <AbsencesContent />
-    </main>
   );
 }

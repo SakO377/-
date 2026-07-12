@@ -9,15 +9,6 @@ import { renderInvoiceHtml } from "../lib/invoice-html";
 
 const liff = new Hono<{ Bindings: Env }>();
 
-// 一時的な診断用エンドポイント(LIFFログインのループ調査用。原因判明後に削除する)。
-liff.post("/debug", async (c) => {
-  const body = await c.req.text();
-  await c.env.DB.prepare("INSERT INTO debug_events (id, payload) VALUES (?, ?)")
-    .bind(generateId("dbg"), body)
-    .run();
-  return c.body(null, 204);
-});
-
 async function authenticateLineUser(
   authHeader: string | undefined,
   channelId: string
