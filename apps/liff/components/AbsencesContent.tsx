@@ -19,6 +19,7 @@ interface AbsenceRow {
   date: string;
   reason: string | null;
   status: AbsenceStatus;
+  class_name: string | null;
   makeup_date: string | null;
   makeup_class_name: string | null;
 }
@@ -33,7 +34,8 @@ export default function AbsencesContent({
   const { status, error: liffError, liff } = useLiff();
   const [students, setStudents] = useState<GuardianStudent[]>([]);
   const [absences, setAbsences] = useState<AbsenceRow[]>([]);
-  const [form, setForm] = useState({ student_id: "", date: "", reason: "" });
+  const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
+  const [form, setForm] = useState({ student_id: "", class_id: "", date: "", reason: "" });
   const [error, setError] = useState<string | null>(null);
   const [notLinked, setNotLinked] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -68,6 +70,14 @@ export default function AbsencesContent({
     if (status === "ready") load();
   }, [status, load]);
 
+  // 欠席するクラス/コースの選択肢(公開クラス一覧を利用、認証不要)
+  useEffect(() => {
+    if (status !== "ready") return;
+    apiFetch<{ classes: { id: string; name: string }[] }>("/api/trials/public-classes")
+      .then((res) => setClasses(res.classes))
+      .catch(() => {});
+  }, [status]);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -78,11 +88,12 @@ export default function AbsencesContent({
         headers: authHeader(),
         body: JSON.stringify({
           student_id: form.student_id,
+          class_id: form.class_id || null,
           date: form.date,
           reason: form.reason || null,
         }),
       });
-      setForm({ ...form, date: "", reason: "" });
+      setForm({ ...form, class_id: "", date: "", reason: "" });
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "送信に失敗しました");
@@ -133,6 +144,20 @@ export default function AbsencesContent({
                 </option>
               ))}
             </select>
+            {classes.length > 0 && (
+              <select
+                className="rounded border px-3 py-2"
+                value={form.class_id}
+                onChange={(e) => setForm({ ...form, class_id: e.target.value })}
+              >
+                <option value="">どのクラス/コースを欠席しますか?(任意)</option>
+                {classes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <input
               type="date"
               className="rounded border px-3 py-2"
@@ -166,6 +191,7 @@ export default function AbsencesContent({
                 <p>
                   {a.student_name} / {a.date} / {a.status}
                 </p>
+                {a.class_name && <p className="text-gray-500">対象: {a.class_name}</p>}
                 {a.reason && <p className="text-gray-500">理由: {a.reason}</p>}
                 {a.status === "確定" && a.makeup_date && (
                   <p className="text-gray-500">

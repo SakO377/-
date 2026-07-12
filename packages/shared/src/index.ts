@@ -31,6 +31,9 @@ export interface ClassEntity {
 export interface Student {
   id: string;
   name: string;
+  last_name: string | null;
+  first_name: string | null;
+  name_kana: string | null;
   grade: string | null;
   course: string | null;
   class_id: string | null;

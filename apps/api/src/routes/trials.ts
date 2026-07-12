@@ -28,6 +28,7 @@ async function classAvailability(env: Env) {
             (SELECT COUNT(*) FROM students s WHERE s.class_id = c.id AND s.status = '在籍') AS enrolled,
             (SELECT COUNT(*) FROM trials t WHERE t.class_id = c.id AND t.status = '予約確定') AS reserved
      FROM classes c
+     WHERE c.archived_at IS NULL
      ORDER BY c.weekday, c.start_time`
   ).all<{
     id: string;

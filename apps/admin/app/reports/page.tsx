@@ -29,11 +29,17 @@ interface MissingStudent {
   grade: string | null;
 }
 
+interface StaffName {
+  id: string;
+  name: string;
+}
+
 function ReportsView() {
   const [students, setStudents] = useState<Student[]>([]);
   const [templates, setTemplates] = useState<ReportTemplate[]>([]);
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [missing, setMissing] = useState<MissingStudent[]>([]);
+  const [staffNames, setStaffNames] = useState<StaffName[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const [templateForm, setTemplateForm] = useState({ name: "", subject: "", body_template: "" });
@@ -46,16 +52,18 @@ function ReportsView() {
 
   async function load() {
     try {
-      const [studentsRes, templatesRes, reportsRes, missingRes] = await Promise.all([
+      const [studentsRes, templatesRes, reportsRes, missingRes, staffRes] = await Promise.all([
         apiFetch<{ students: Student[] }>("/api/students"),
         apiFetch<{ report_templates: ReportTemplate[] }>("/api/report-templates"),
         apiFetch<{ reports: ReportRow[] }>("/api/reports"),
         apiFetch<{ students: MissingStudent[] }>("/api/dashboard/reports-missing"),
+        apiFetch<{ staff: StaffName[] }>("/api/staff/names"),
       ]);
       setStudents(studentsRes.students);
       setTemplates(templatesRes.report_templates);
       setReports(reportsRes.reports);
       setMissing(missingRes.students);
+      setStaffNames(staffRes.staff);
       setReportForm((f) => (f.student_id ? f : { ...f, student_id: studentsRes.students[0]?.id ?? "" }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "読み込みに失敗しました");
@@ -244,12 +252,30 @@ function ReportsView() {
               </p>
             </div>
           )}
-          <input
-            className="rounded border px-3 py-2"
-            placeholder="担当講師名"
-            value={reportForm.author}
-            onChange={(e) => setReportForm({ ...reportForm, author: e.target.value })}
-          />
+          <div className="flex flex-col gap-1">
+            <label className="text-sm text-gray-600">担当講師</label>
+            {staffNames.length > 0 ? (
+              <select
+                className="rounded border px-3 py-2"
+                value={reportForm.author}
+                onChange={(e) => setReportForm({ ...reportForm, author: e.target.value })}
+              >
+                <option value="">選択してください</option>
+                {staffNames.map((s) => (
+                  <option key={s.id} value={s.name}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                className="rounded border px-3 py-2"
+                placeholder="担当講師名"
+                value={reportForm.author}
+                onChange={(e) => setReportForm({ ...reportForm, author: e.target.value })}
+              />
+            )}
+          </div>
           <textarea
             className="rounded border px-3 py-2"
             rows={4}

@@ -7,6 +7,17 @@ import { generateApiKey, generateId } from "../lib/id";
 
 const staff = new Hono<{ Bindings: Env; Variables: Variables }>();
 staff.use("*", requireAuth);
+
+// スタッフ名の一覧(指導報告書の担当講師の選択肢などに使う)。
+// 一覧・作成・削除はオーナー専用だが、名前だけはどのスタッフでも参照できるよう
+// requireRole より前に登録する。
+staff.get("/names", async (c) => {
+  const { results } = await c.env.DB.prepare(
+    "SELECT id, name FROM staff ORDER BY created_at"
+  ).all();
+  return c.json({ staff: results ?? [] });
+});
+
 staff.use("*", requireRole("owner"));
 
 // api_key は返さない(発行時に一度だけ表示)

@@ -33,13 +33,12 @@ interface AtRiskStudent {
   name: string;
   grade: string | null;
   reasons: string[];
-  last_check_in: string | null;
   overdue_unpaid: number;
 }
 
 interface AtRiskData {
   at_risk: AtRiskStudent[];
-  criteria: { absence_days: number; unpaid_days: number };
+  criteria: { unpaid_days: number };
 }
 
 function yen(value: number) {
@@ -132,10 +131,8 @@ function AtRiskSection({ atRisk }: { atRisk: AtRiskData }) {
   return (
     <section className="mt-6 rounded-lg border p-4">
       <div className="mb-1 flex items-baseline justify-between">
-        <h2 className="font-semibold">気にかけたい生徒(離脱リスク)</h2>
-        <span className="text-xs text-gray-400">
-          {atRisk.criteria.absence_days}日以上未出席 / 未入金{atRisk.criteria.unpaid_days}日以上
-        </span>
+        <h2 className="font-semibold">気にかけたい生徒(未入金)</h2>
+        <span className="text-xs text-gray-400">未入金{atRisk.criteria.unpaid_days}日以上</span>
       </div>
       {atRisk.at_risk.length === 0 ? (
         <p className="text-sm text-gray-500">いまのところ気になる生徒はいません。</p>

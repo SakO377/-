@@ -132,14 +132,12 @@ dashboard.get("/reports-missing", async (c) => {
 // いずれも既存データのみで判定するため追加コストなし。
 dashboard.get("/at-risk", async (c) => {
   const db = c.env.DB;
-  const absenceDays = 21;
   const unpaidDays = 30;
 
+  // 未入金/一部入金の請求書が unpaidDays 日以上前から残っている在籍生徒のみを対象にする。
   const { results } = await db
     .prepare(
       `SELECT s.id, s.name, s.grade,
-              (SELECT MAX(timestamp) FROM attendance_logs al
-                 WHERE al.student_id = s.id AND al.type = 'check_in') AS last_check_in,
               (SELECT COUNT(*) FROM invoices i
                  WHERE i.student_id = s.id AND i.paid_status != '入金済'
                    AND i.created_at <= datetime('now', ?)) AS overdue_unpaid
@@ -152,45 +150,20 @@ dashboard.get("/at-risk", async (c) => {
       id: string;
       name: string;
       grade: string | null;
-      last_check_in: string | null;
       overdue_unpaid: number;
     }>();
 
-  const cutoff = new Date(Date.now() - absenceDays * 24 * 60 * 60 * 1000);
-  const atRisk: {
-    id: string;
-    name: string;
-    grade: string | null;
-    reasons: string[];
-    last_check_in: string | null;
-    overdue_unpaid: number;
-  }[] = [];
+  const atRisk = (results ?? [])
+    .filter((s) => s.overdue_unpaid > 0)
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      grade: s.grade,
+      reasons: [`未入金 ${s.overdue_unpaid} 件(${unpaidDays}日以上)`],
+      overdue_unpaid: s.overdue_unpaid,
+    }));
 
-  for (const s of results ?? []) {
-    const reasons: string[] = [];
-    // last_check_in は "YYYY-MM-DD HH:MM:SS"(UTC)。記録があり、かつ古い場合のみ対象。
-    if (s.last_check_in) {
-      const last = new Date(s.last_check_in.replace(" ", "T") + "Z");
-      if (last < cutoff) {
-        reasons.push(`${absenceDays}日以上入室なし`);
-      }
-    }
-    if (s.overdue_unpaid > 0) {
-      reasons.push(`未入金 ${s.overdue_unpaid} 件(${unpaidDays}日以上)`);
-    }
-    if (reasons.length > 0) {
-      atRisk.push({
-        id: s.id,
-        name: s.name,
-        grade: s.grade,
-        reasons,
-        last_check_in: s.last_check_in,
-        overdue_unpaid: s.overdue_unpaid,
-      });
-    }
-  }
-
-  return c.json({ at_risk: atRisk, criteria: { absence_days: absenceDays, unpaid_days: unpaidDays } });
+  return c.json({ at_risk: atRisk, criteria: { unpaid_days: unpaidDays } });
 });
 
 export default dashboard;

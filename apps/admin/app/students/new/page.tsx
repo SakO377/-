@@ -35,7 +35,9 @@ const GRADE_CUSTOM = "__custom__";
 function NewStudentForm() {
   const router = useRouter();
   const [form, setForm] = useState({
-    name: "",
+    lastName: "",
+    firstName: "",
+    nameKana: "",
     grade: "",
     course: "",
     monthlyFee: "",
@@ -81,10 +83,14 @@ function NewStudentForm() {
     setLoading(true);
     setError(null);
     try {
+      const fullName = `${form.lastName.trim()} ${form.firstName.trim()}`.trim();
       const student = await apiFetch<{ id: string }>("/api/students", {
         method: "POST",
         body: JSON.stringify({
-          name: form.name,
+          name: fullName,
+          last_name: form.lastName.trim() || null,
+          first_name: form.firstName.trim() || null,
+          name_kana: form.nameKana.trim() || null,
           grade: form.grade || null,
           course: form.course || null,
           class_id: form.classId || null,
@@ -105,12 +111,26 @@ function NewStudentForm() {
     <main className="mx-auto max-w-md p-6">
       <h1 className="mb-4 text-xl font-bold">生徒の新規登録</h1>
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <div className="flex gap-2">
+          <input
+            className="flex-1 rounded border px-3 py-2"
+            placeholder="姓(例: 山田)"
+            value={form.lastName}
+            onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+            required
+          />
+          <input
+            className="flex-1 rounded border px-3 py-2"
+            placeholder="名(例: 太郎)"
+            value={form.firstName}
+            onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+          />
+        </div>
         <input
           className="rounded border px-3 py-2"
-          placeholder="氏名"
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-          required
+          placeholder="ふりがな(ひらがな・例: やまだ たろう)"
+          value={form.nameKana}
+          onChange={(e) => setForm({ ...form, nameKana: e.target.value })}
         />
 
         <div className="flex flex-col gap-1">

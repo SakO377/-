@@ -13,6 +13,9 @@ students.use("*", requireAuth);
 
 const studentInput = z.object({
   name: z.string().min(1),
+  last_name: z.string().nullable().optional(),
+  first_name: z.string().nullable().optional(),
+  name_kana: z.string().nullable().optional(),
   grade: z.string().nullable().optional(),
   course: z.string().nullable().optional(),
   class_id: z.string().nullable().optional(),
@@ -49,7 +52,7 @@ students.get("/", async (c) => {
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   // qr_token は入退室QRの秘密情報なので一覧では返さない
   const { results } = await c.env.DB.prepare(
-    `SELECT id, name, grade, course, class_id, status, tags, metadata, monthly_fee,
+    `SELECT id, name, last_name, first_name, name_kana, grade, course, class_id, status, tags, metadata, monthly_fee,
             enrolled_at, withdrawn_at, created_at
      FROM students ${where} ORDER BY created_at DESC`
   )
@@ -61,12 +64,13 @@ students.get("/", async (c) => {
 // 生徒名簿のCSVエクスポート(/:id より先に登録してルート衝突を避ける)
 students.get("/export.csv", async (c) => {
   const { results } = await c.env.DB.prepare(
-    `SELECT s.name, s.grade, s.course, c.name AS class_name, s.status, s.tags, s.monthly_fee,
+    `SELECT s.name, s.name_kana, s.grade, s.course, c.name AS class_name, s.status, s.tags, s.monthly_fee,
             s.enrolled_at, s.withdrawn_at, s.created_at
      FROM students s LEFT JOIN classes c ON c.id = s.class_id
      ORDER BY s.created_at`
   ).all<{
     name: string;
+    name_kana: string | null;
     grade: string | null;
     course: string | null;
     class_name: string | null;
@@ -78,10 +82,11 @@ students.get("/export.csv", async (c) => {
     created_at: string;
   }>();
 
-  const header = "氏名,学年,コース,クラス,ステータス,タグ,月謝,入会日,退会日,登録日";
+  const header = "氏名,ふりがな,学年,コース,クラス,ステータス,タグ,月謝,入会日,退会日,登録日";
   const rows = (results ?? []).map((r) =>
     [
       r.name,
+      r.name_kana ?? "",
       r.grade ?? "",
       r.course ?? "",
       r.class_name ?? "",
@@ -118,6 +123,7 @@ students.post("/import.csv", async (c) => {
   if (iName < 0) {
     return c.json({ error: "見出しに「氏名」列が必要です" }, 400);
   }
+  const iKana = idx("ふりがな");
   const iGrade = idx("学年");
   const iCourse = idx("コース");
   const iClass = idx("クラス");
@@ -143,6 +149,7 @@ students.post("/import.csv", async (c) => {
       errors.push({ row: r + 1, reason: "氏名が空です" });
       continue;
     }
+    const nameKana = iKana >= 0 ? cols[iKana]?.trim() || null : null;
     const grade = iGrade >= 0 ? cols[iGrade]?.trim() || null : null;
     const course = iCourse >= 0 ? cols[iCourse]?.trim() || null : null;
     const className = iClass >= 0 ? cols[iClass]?.trim() : "";
@@ -161,11 +168,12 @@ students.post("/import.csv", async (c) => {
 
     statements.push(
       c.env.DB.prepare(
-        `INSERT INTO students (id, name, grade, course, class_id, status, tags, metadata, qr_token, monthly_fee)
-         VALUES (?, ?, ?, ?, ?, ?, ?, '{}', ?, ?)`
+        `INSERT INTO students (id, name, name_kana, grade, course, class_id, status, tags, metadata, qr_token, monthly_fee)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, ?)`
       ).bind(
         generateId("student"),
         name,
+        nameKana,
         grade,
         course,
         classId,
@@ -193,12 +201,15 @@ students.post("/", zValidator("json", studentInput), async (c) => {
     "0"
   )}-${String(nowJst.getUTCDate()).padStart(2, "0")}`;
   await c.env.DB.prepare(
-    `INSERT INTO students (id, name, grade, course, class_id, status, tags, metadata, qr_token, monthly_fee, enrolled_at, withdrawn_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO students (id, name, last_name, first_name, name_kana, grade, course, class_id, status, tags, metadata, qr_token, monthly_fee, enrolled_at, withdrawn_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
       body.name,
+      body.last_name ?? null,
+      body.first_name ?? null,
+      body.name_kana ?? null,
       body.grade ?? null,
       body.course ?? null,
       body.class_id ?? null,
@@ -255,6 +266,18 @@ students.patch("/:id", zValidator("json", studentInput.partial()), async (c) => 
   if (body.name !== undefined) {
     fields.push("name = ?");
     params.push(body.name);
+  }
+  if (body.last_name !== undefined) {
+    fields.push("last_name = ?");
+    params.push(body.last_name);
+  }
+  if (body.first_name !== undefined) {
+    fields.push("first_name = ?");
+    params.push(body.first_name);
+  }
+  if (body.name_kana !== undefined) {
+    fields.push("name_kana = ?");
+    params.push(body.name_kana);
   }
   if (body.grade !== undefined) {
     fields.push("grade = ?");

@@ -12,6 +12,7 @@ interface AbsenceRow {
   date: string;
   reason: string | null;
   status: AbsenceStatus;
+  class_name: string | null;
   makeup_date: string | null;
   makeup_class_name: string | null;
 }
@@ -104,6 +105,7 @@ function AbsencesView() {
             <tr className="border-b text-left text-gray-500">
               <th className="py-2">生徒</th>
               <th className="py-2">欠席日</th>
+              <th className="py-2">対象クラス</th>
               <th className="py-2">理由</th>
               <th className="py-2">ステータス</th>
               <th className="py-2">振替日</th>
@@ -115,6 +117,7 @@ function AbsencesView() {
               <tr key={a.id} className="border-b align-top">
                 <td className="py-2">{a.student_name}</td>
                 <td className="py-2">{a.date}</td>
+                <td className="py-2">{a.class_name ?? "-"}</td>
                 <td className="py-2">{a.reason ?? "-"}</td>
                 <td className="py-2">
                   <StatusBadge status={a.status} />

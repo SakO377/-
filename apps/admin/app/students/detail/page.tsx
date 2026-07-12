@@ -30,6 +30,9 @@ const GRADE_CUSTOM = "__custom__";
 interface StudentDetail {
   id: string;
   name: string;
+  last_name: string | null;
+  first_name: string | null;
+  name_kana: string | null;
   grade: string | null;
   course: string | null;
   class_id: string | null;
@@ -396,7 +399,9 @@ function StudentDetailView() {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [monthlyFeeInput, setMonthlyFeeInput] = useState("");
   const [basicForm, setBasicForm] = useState({
-    name: "",
+    lastName: "",
+    firstName: "",
+    nameKana: "",
     grade: "",
     course: "",
     class_id: "",
@@ -415,7 +420,10 @@ function StudentDetailView() {
       setStudent(res);
       setMonthlyFeeInput(res.monthly_fee != null ? String(res.monthly_fee) : "");
       setBasicForm({
-        name: res.name,
+        // 姓・名が未設定の既存生徒は、表示名(name)を姓に入れておく(編集で分けられる)
+        lastName: res.last_name ?? res.name ?? "",
+        firstName: res.first_name ?? "",
+        nameKana: res.name_kana ?? "",
         grade: res.grade ?? "",
         course: res.course ?? "",
         class_id: res.class_id ?? "",
@@ -503,10 +511,14 @@ function StudentDetailView() {
   async function saveBasic() {
     if (!student) return;
     setBasicSaved(false);
+    const fullName = `${basicForm.lastName.trim()} ${basicForm.firstName.trim()}`.trim();
     const res = await apiFetch<StudentDetail>(`/api/students/${student.id}`, {
       method: "PATCH",
       body: JSON.stringify({
-        name: basicForm.name,
+        name: fullName,
+        last_name: basicForm.lastName.trim() || null,
+        first_name: basicForm.firstName.trim() || null,
+        name_kana: basicForm.nameKana.trim() || null,
         grade: basicForm.grade || null,
         course: basicForm.course || null,
         class_id: basicForm.class_id || null,
@@ -518,6 +530,9 @@ function StudentDetailView() {
     setStudent({
       ...student,
       name: res.name,
+      last_name: res.last_name,
+      first_name: res.first_name,
+      name_kana: res.name_kana,
       grade: res.grade,
       course: res.course,
       class_id: res.class_id,
@@ -555,11 +570,30 @@ function StudentDetailView() {
         <h2 className="mb-2 font-semibold">基本情報</h2>
         <div className="flex flex-col gap-3 rounded-lg border p-4">
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-gray-600">氏名</label>
+            <label className="text-sm text-gray-600">氏名(姓 / 名)</label>
+            <div className="flex gap-2">
+              <input
+                className="flex-1 rounded border px-3 py-2"
+                placeholder="姓"
+                value={basicForm.lastName}
+                onChange={(e) => setBasicForm({ ...basicForm, lastName: e.target.value })}
+              />
+              <input
+                className="flex-1 rounded border px-3 py-2"
+                placeholder="名"
+                value={basicForm.firstName}
+                onChange={(e) => setBasicForm({ ...basicForm, firstName: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-sm text-gray-600">ふりがな</label>
             <input
               className="rounded border px-3 py-2"
-              value={basicForm.name}
-              onChange={(e) => setBasicForm({ ...basicForm, name: e.target.value })}
+              placeholder="ひらがな(例: やまだ たろう)"
+              value={basicForm.nameKana}
+              onChange={(e) => setBasicForm({ ...basicForm, nameKana: e.target.value })}
             />
           </div>
 

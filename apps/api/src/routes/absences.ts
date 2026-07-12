@@ -24,8 +24,10 @@ absences.get("/", async (c) => {
   }
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const { results } = await c.env.DB.prepare(
-    `SELECT a.*, s.name AS student_name, mc.name AS makeup_class_name FROM absence_requests a
+    `SELECT a.*, s.name AS student_name, cc.name AS class_name, mc.name AS makeup_class_name
+     FROM absence_requests a
      JOIN students s ON s.id = a.student_id
+     LEFT JOIN classes cc ON cc.id = a.class_id
      LEFT JOIN classes mc ON mc.id = a.makeup_class_id
      ${where}
      ORDER BY a.date DESC, a.created_at DESC`

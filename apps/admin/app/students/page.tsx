@@ -28,7 +28,9 @@ function StudentsList() {
     return students.filter((s) => {
       if (statusFilter !== "all" && s.status !== statusFilter) return false;
       if (!q) return true;
-      const haystack = [s.name, s.grade ?? "", s.course ?? "", ...s.tags].join(" ").toLowerCase();
+      const haystack = [s.name, s.name_kana ?? "", s.grade ?? "", s.course ?? "", ...s.tags]
+        .join(" ")
+        .toLowerCase();
       return haystack.includes(q);
     });
   }, [students, search, statusFilter]);
@@ -172,7 +174,7 @@ function StudentsList() {
             </div>
             <input
               className="rounded border px-3 py-1.5 text-sm sm:w-64"
-              placeholder="氏名・学年・コース・タグで検索"
+              placeholder="氏名・ふりがな・学年・タグで検索"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />

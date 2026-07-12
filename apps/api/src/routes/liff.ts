@@ -124,9 +124,11 @@ liff.get("/absences", async (c) => {
   if (!guardian) return c.json({ error: "認証に失敗しました" }, 401);
 
   const { results } = await c.env.DB.prepare(
-    `SELECT a.*, s.name AS student_name, mc.name AS makeup_class_name FROM absence_requests a
+    `SELECT a.*, s.name AS student_name, cc.name AS class_name, mc.name AS makeup_class_name
+     FROM absence_requests a
      JOIN students s ON s.id = a.student_id
      JOIN student_guardians sg ON sg.student_id = a.student_id
+     LEFT JOIN classes cc ON cc.id = a.class_id
      LEFT JOIN classes mc ON mc.id = a.makeup_class_id
      WHERE sg.guardian_id = ?
      ORDER BY a.date DESC, a.created_at DESC`
@@ -154,7 +156,8 @@ async function computeMakeupOptions(env: Env, weeksAhead = 4): Promise<MakeupOpt
   const { results: classRows } = await env.DB.prepare(
     `SELECT c.id, c.name, c.weekday, c.start_time, c.end_time, c.capacity,
             (SELECT COUNT(*) FROM students s WHERE s.class_id = c.id AND s.status = '在籍') AS enrolled
-     FROM classes c`
+     FROM classes c
+     WHERE c.archived_at IS NULL`
   ).all<{
     id: string;
     name: string;

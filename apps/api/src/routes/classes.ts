@@ -17,12 +17,16 @@ const classInput = z.object({
 });
 
 classes.get("/", async (c) => {
+  // 既定は現役クラスのみ。?archived=1 で削除(アーカイブ)済みクラスを返す。
+  const archived = c.req.query("archived") === "1";
+  const where = archived ? "c.archived_at IS NOT NULL" : "c.archived_at IS NULL";
   // 在籍生徒数(enrolled)を同時に返し、定員に対する空き枠を管理画面で表示できるようにする
   const { results } = await c.env.DB.prepare(
     `SELECT c.*,
             (SELECT COUNT(*) FROM students s
               WHERE s.class_id = c.id AND s.status = '在籍') AS enrolled
      FROM classes c
+     WHERE ${where}
      ORDER BY c.weekday, c.start_time`
   ).all();
   return c.json({ classes: results ?? [] });
@@ -72,8 +76,17 @@ classes.patch("/:id", zValidator("json", classInput.partial()), async (c) => {
   return c.json(row);
 });
 
+// 物理削除せずアーカイブする(削除記録として archived_at を残し、
+// 在籍生徒のクラス参照や過去の欠席・振替記録を壊さない)。
 classes.delete("/:id", async (c) => {
-  await c.env.DB.prepare("DELETE FROM classes WHERE id = ?").bind(c.req.param("id")).run();
+  const id = c.req.param("id");
+  const existing = await c.env.DB.prepare("SELECT id FROM classes WHERE id = ?").bind(id).first();
+  if (!existing) return c.json({ error: "Not found" }, 404);
+  await c.env.DB.prepare(
+    "UPDATE classes SET archived_at = datetime('now') WHERE id = ? AND archived_at IS NULL"
+  )
+    .bind(id)
+    .run();
   return c.body(null, 204);
 });
 
