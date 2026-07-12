@@ -5,6 +5,7 @@ import { useLiff } from "@/lib/useLiff";
 import { apiFetch, ApiError } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
 import NotLinkedNotice from "@/components/NotLinkedNotice";
+import MakeupPicker from "@/components/MakeupPicker";
 import type { AbsenceStatus } from "@school-harness/shared";
 
 interface GuardianStudent {
@@ -19,6 +20,7 @@ interface AbsenceRow {
   reason: string | null;
   status: AbsenceStatus;
   makeup_date: string | null;
+  makeup_class_name: string | null;
 }
 
 export default function AbsencesContent({
@@ -35,6 +37,7 @@ export default function AbsencesContent({
   const [error, setError] = useState<string | null>(null);
   const [notLinked, setNotLinked] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [pickingFor, setPickingFor] = useState<string | null>(null);
 
   const authHeader = useCallback((): Record<string, string> => {
     const idToken = liff.getIDToken();
@@ -164,14 +167,47 @@ export default function AbsencesContent({
                   {a.student_name} / {a.date} / {a.status}
                 </p>
                 {a.reason && <p className="text-gray-500">理由: {a.reason}</p>}
-                {a.makeup_date && <p className="text-gray-500">振替候補日: {a.makeup_date}</p>}
-                {a.status === "振替提案" && (
-                  <button
-                    onClick={() => confirmMakeup(a.id)}
-                    className="mt-2 rounded bg-black px-3 py-1 text-xs text-white"
-                  >
-                    この振替日で確定する
-                  </button>
+                {a.status === "確定" && a.makeup_date && (
+                  <p className="text-gray-500">
+                    振替日: {a.makeup_date}
+                    {a.makeup_class_name ? `(${a.makeup_class_name})` : ""}
+                  </p>
+                )}
+                {a.status === "振替提案" && a.makeup_date && (
+                  <p className="text-gray-500">教室からの提案日: {a.makeup_date}</p>
+                )}
+
+                {(a.status === "申請" || a.status === "振替提案") && pickingFor !== a.id && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {a.status === "振替提案" && (
+                      <button
+                        onClick={() => confirmMakeup(a.id)}
+                        className="rounded bg-black px-3 py-1 text-xs text-white"
+                      >
+                        提案日で確定する
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setPickingFor(a.id)}
+                      className="rounded border px-3 py-1 text-xs hover:bg-gray-50"
+                    >
+                      空いている振替枠から選ぶ
+                    </button>
+                  </div>
+                )}
+
+                {pickingFor === a.id && (
+                  <div className="mt-2">
+                    <MakeupPicker
+                      absenceId={a.id}
+                      authHeader={authHeader}
+                      onCancel={() => setPickingFor(null)}
+                      onDone={() => {
+                        setPickingFor(null);
+                        load();
+                      }}
+                    />
+                  </div>
                 )}
               </li>
             ))}

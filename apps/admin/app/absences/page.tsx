@@ -13,6 +13,7 @@ interface AbsenceRow {
   reason: string | null;
   status: AbsenceStatus;
   makeup_date: string | null;
+  makeup_class_name: string | null;
 }
 
 function AbsencesView() {
@@ -80,14 +81,19 @@ function AbsencesView() {
           <li>
             <span className="font-medium text-gray-800">振替提案</span>
             :別日の候補を入力して「振替日を提案」を押すと、この状態になります。
+            <span className="text-gray-500">保護者にLINEで通知が届きます。</span>
           </li>
           <li>
             <span className="font-medium text-gray-800">確定</span>
             :保護者と振替日が合意できたら「確定にする」を押して完了です。
+            <span className="text-gray-500">こちらもLINEで通知されます。</span>
           </li>
         </ol>
         <p className="mt-2 text-gray-500">
           振替をしない場合は「欠席のみ(振替なし)」を押せば、そのまま記録して完了できます。
+        </p>
+        <p className="mt-1 text-gray-500">
+          保護者はLIFFアプリの「空いている振替枠から選ぶ」から、教室の空き状況を見て自分で振替日を選んで確定することもできます(その場合はこちらの操作なしで自動的に「確定」になります)。
         </p>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
@@ -113,7 +119,12 @@ function AbsencesView() {
                 <td className="py-2">
                   <StatusBadge status={a.status} />
                 </td>
-                <td className="py-2">{a.makeup_date ?? "-"}</td>
+                <td className="py-2">
+                  {a.makeup_date ?? "-"}
+                  {a.makeup_class_name && (
+                    <span className="block text-xs text-gray-400">{a.makeup_class_name}</span>
+                  )}
+                </td>
                 <td className="py-2">
                   {a.status === "確定" || a.status === "欠席のみ" ? (
                     <button

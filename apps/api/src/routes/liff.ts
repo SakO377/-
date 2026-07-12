@@ -124,9 +124,10 @@ liff.get("/absences", async (c) => {
   if (!guardian) return c.json({ error: "認証に失敗しました" }, 401);
 
   const { results } = await c.env.DB.prepare(
-    `SELECT a.*, s.name AS student_name FROM absence_requests a
+    `SELECT a.*, s.name AS student_name, mc.name AS makeup_class_name FROM absence_requests a
      JOIN students s ON s.id = a.student_id
      JOIN student_guardians sg ON sg.student_id = a.student_id
+     LEFT JOIN classes mc ON mc.id = a.makeup_class_id
      WHERE sg.guardian_id = ?
      ORDER BY a.date DESC, a.created_at DESC`
   )
@@ -135,6 +136,143 @@ liff.get("/absences", async (c) => {
 
   return c.json({ absences: results ?? [] });
 });
+
+interface MakeupOption {
+  class_id: string;
+  class_name: string;
+  date: string;
+  weekday: number;
+  start_time: string;
+  end_time: string;
+  remaining: number | null;
+}
+
+// 今日以降 weeksAhead 週間分の「空きのある振替枠」を、クラスの定員・在籍数・
+// 既に埋まっている振替予約数から計算する(競合の学習塾システムと同様、
+// 保護者が空き枠から直接選べるようにするため)。
+async function computeMakeupOptions(env: Env, weeksAhead = 4): Promise<MakeupOption[]> {
+  const { results: classRows } = await env.DB.prepare(
+    `SELECT c.id, c.name, c.weekday, c.start_time, c.end_time, c.capacity,
+            (SELECT COUNT(*) FROM students s WHERE s.class_id = c.id AND s.status = '在籍') AS enrolled
+     FROM classes c`
+  ).all<{
+    id: string;
+    name: string;
+    weekday: number;
+    start_time: string;
+    end_time: string;
+    capacity: number | null;
+    enrolled: number;
+  }>();
+  const classes = classRows ?? [];
+  if (classes.length === 0) return [];
+
+  const { results: makeupRows } = await env.DB.prepare(
+    `SELECT makeup_class_id, makeup_date, COUNT(*) AS cnt FROM absence_requests
+     WHERE makeup_class_id IS NOT NULL AND makeup_date IS NOT NULL AND status IN ('振替提案', '確定')
+     GROUP BY makeup_class_id, makeup_date`
+  ).all<{ makeup_class_id: string; makeup_date: string; cnt: number }>();
+  const usedMap = new Map<string, number>();
+  for (const r of makeupRows ?? []) {
+    usedMap.set(`${r.makeup_class_id}|${r.makeup_date}`, r.cnt);
+  }
+
+  // 日本時間の「今日」を基準に、明日から weeksAhead*7 日分を候補にする
+  const nowJst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const options: MakeupOption[] = [];
+  for (let offset = 1; offset <= weeksAhead * 7; offset++) {
+    const d = new Date(Date.UTC(nowJst.getUTCFullYear(), nowJst.getUTCMonth(), nowJst.getUTCDate() + offset));
+    const weekday = d.getUTCDay();
+    const dateStr = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(
+      d.getUTCDate()
+    ).padStart(2, "0")}`;
+    for (const cls of classes) {
+      if (cls.weekday !== weekday) continue;
+      const used = usedMap.get(`${cls.id}|${dateStr}`) ?? 0;
+      const remaining = cls.capacity == null ? null : cls.capacity - cls.enrolled - used;
+      if (remaining !== null && remaining <= 0) continue;
+      options.push({
+        class_id: cls.id,
+        class_name: cls.name,
+        date: dateStr,
+        weekday,
+        start_time: cls.start_time,
+        end_time: cls.end_time,
+        remaining,
+      });
+    }
+  }
+  options.sort((a, b) => (a.date + a.start_time).localeCompare(b.date + b.start_time));
+  return options;
+}
+
+// 特定の欠席連絡に対して、保護者が選べる振替の空き枠一覧を返す
+liff.get("/absences/:id/makeup-options", async (c) => {
+  const guardian = await requireGuardian(c);
+  if (!guardian) return c.json({ error: "認証に失敗しました" }, 401);
+
+  const id = c.req.param("id");
+  const absence = await c.env.DB.prepare(
+    `SELECT a.id FROM absence_requests a
+     JOIN student_guardians sg ON sg.student_id = a.student_id
+     WHERE a.id = ? AND sg.guardian_id = ?`
+  )
+    .bind(id, guardian.id)
+    .first();
+  if (!absence) return c.json({ error: "Not found" }, 404);
+
+  const options = await computeMakeupOptions(c.env);
+  return c.json({ options });
+});
+
+// 保護者が空き枠から振替日時を選び、その場で確定する(自己解決型)。
+// 選択時点の空きを再確認してから確定するため、二重予約を防ぐ。
+liff.post(
+  "/absences/:id/select-makeup",
+  zValidator(
+    "json",
+    z.object({ class_id: z.string().min(1), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) })
+  ),
+  async (c) => {
+    const guardian = await requireGuardian(c);
+    if (!guardian) return c.json({ error: "認証に失敗しました" }, 401);
+
+    const id = c.req.param("id");
+    const absence = await c.env.DB.prepare(
+      `SELECT a.id, a.status FROM absence_requests a
+       JOIN student_guardians sg ON sg.student_id = a.student_id
+       WHERE a.id = ? AND sg.guardian_id = ?`
+    )
+      .bind(id, guardian.id)
+      .first<{ id: string; status: string }>();
+    if (!absence) return c.json({ error: "Not found" }, 404);
+    if (absence.status === "確定") {
+      return c.json({ error: "この欠席連絡は既に振替が確定しています" }, 409);
+    }
+
+    const { class_id, date } = c.req.valid("json");
+    const options = await computeMakeupOptions(c.env);
+    const chosen = options.find((o) => o.class_id === class_id && o.date === date);
+    if (!chosen) {
+      return c.json({ error: "選択した枠は既に埋まっているか、対象外です。別の枠をお選びください。" }, 409);
+    }
+
+    await c.env.DB.prepare(
+      "UPDATE absence_requests SET status = '確定', makeup_date = ?, makeup_class_id = ? WHERE id = ?"
+    )
+      .bind(date, class_id, id)
+      .run();
+
+    const row = await c.env.DB.prepare(
+      `SELECT a.*, mc.name AS makeup_class_name FROM absence_requests a
+       LEFT JOIN classes mc ON mc.id = a.makeup_class_id
+       WHERE a.id = ?`
+    )
+      .bind(id)
+      .first();
+    return c.json(row);
+  }
+);
 
 const liffAbsenceInput = z.object({
   student_id: z.string().min(1),

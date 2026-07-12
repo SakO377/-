@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { Env, Variables } from "../types";
 import { requireAuth } from "../middleware/auth";
 import { generateId } from "../lib/id";
+import { notifyGuardiansOfStudent } from "../lib/notify";
 
 const absences = new Hono<{ Bindings: Env; Variables: Variables }>();
 absences.use("*", requireAuth);
@@ -23,8 +24,9 @@ absences.get("/", async (c) => {
   }
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const { results } = await c.env.DB.prepare(
-    `SELECT a.*, s.name AS student_name FROM absence_requests a
+    `SELECT a.*, s.name AS student_name, mc.name AS makeup_class_name FROM absence_requests a
      JOIN students s ON s.id = a.student_id
+     LEFT JOIN classes mc ON mc.id = a.makeup_class_id
      ${where}
      ORDER BY a.date DESC, a.created_at DESC`
   )
@@ -62,9 +64,11 @@ const absenceUpdate = z.object({
 absences.patch("/:id", zValidator("json", absenceUpdate), async (c) => {
   const id = c.req.param("id");
   const body = c.req.valid("json");
-  const existing = await c.env.DB.prepare("SELECT id FROM absence_requests WHERE id = ?")
+  const existing = await c.env.DB.prepare(
+    "SELECT id, student_id, status FROM absence_requests WHERE id = ?"
+  )
     .bind(id)
-    .first();
+    .first<{ id: string; student_id: string; status: string }>();
   if (!existing) return c.json({ error: "Not found" }, 404);
 
   const fields: string[] = [];
@@ -83,7 +87,32 @@ absences.patch("/:id", zValidator("json", absenceUpdate), async (c) => {
       .bind(...params)
       .run();
   }
-  const row = await c.env.DB.prepare("SELECT * FROM absence_requests WHERE id = ?").bind(id).first();
+
+  // 教室側が振替日を提案・確定した場合は、保護者へLINEで知らせる
+  // (これまでは通知が無く、保護者がアプリを自発的に開かない限り気づけなかった)。
+  if (body.status === "振替提案" && body.status !== existing.status) {
+    await notifyGuardiansOfStudent(c.env, existing.student_id, "absence_makeup_proposed", () => [
+      {
+        type: "text",
+        text: `振替日をご提案しました${
+          body.makeup_date ? `(候補日: ${body.makeup_date})` : ""
+        }。アプリでご確認のうえ、確定または他の空き枠からお選びください。`,
+      },
+    ]);
+  } else if (body.status === "確定" && body.status !== existing.status) {
+    await notifyGuardiansOfStudent(c.env, existing.student_id, "absence_makeup_confirmed", () => [
+      { type: "text", text: "振替日が確定しました。アプリでご確認ください。" },
+    ]);
+  }
+
+  const row = await c.env.DB.prepare(
+    `SELECT a.*, s.name AS student_name, mc.name AS makeup_class_name FROM absence_requests a
+     JOIN students s ON s.id = a.student_id
+     LEFT JOIN classes mc ON mc.id = a.makeup_class_id
+     WHERE a.id = ?`
+  )
+    .bind(id)
+    .first();
   return c.json(row);
 });
 
