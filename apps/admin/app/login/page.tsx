@@ -11,7 +11,8 @@ export default function LoginPage() {
   const [demoLoading, setDemoLoading] = useState(false);
   const [demoError, setDemoError] = useState<string | null>(null);
   const [mode, setMode] = useState<"password" | "apikey">("password");
-  const [creds, setCreds] = useState({ name: "", password: "" });
+  const [creds, setCreds] = useState({ name: "", password: "", code: "" });
+  const [showCode, setShowCode] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const router = useRouter();
 
@@ -21,12 +22,18 @@ export default function LoginPage() {
     try {
       const res = await apiFetch<{ api_key: string }>("/api/auth/login", {
         method: "POST",
-        body: JSON.stringify({ name: creds.name, password: creds.password }),
+        body: JSON.stringify({
+          name: creds.name,
+          password: creds.password,
+          ...(creds.code ? { code: creds.code.trim() } : {}),
+        }),
       });
       setApiKey(res.api_key);
       router.push("/dashboard");
     } catch (err) {
-      setLoginError(err instanceof Error ? err.message : "ログインに失敗しました");
+      const message = err instanceof Error ? err.message : "ログインに失敗しました";
+      if (message.includes("コード")) setShowCode(true);
+      setLoginError(message);
     }
   }
 
@@ -115,6 +122,15 @@ export default function LoginPage() {
             onChange={(e) => setCreds({ ...creds, password: e.target.value })}
             required
           />
+          {showCode && (
+            <input
+              className="rounded border px-3 py-2"
+              placeholder="認証コード(またはリカバリーコード)"
+              value={creds.code}
+              onChange={(e) => setCreds({ ...creds, code: e.target.value })}
+              autoFocus
+            />
+          )}
           <button type="submit" className="rounded bg-black px-4 py-2 text-white">
             ログイン
           </button>

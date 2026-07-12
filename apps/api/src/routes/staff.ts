@@ -67,4 +67,16 @@ staff.delete("/:id", async (c) => {
   return c.body(null, 204);
 });
 
+// オーナーが他スタッフの2段階認証を解除する(端末紛失・退職時の復旧用)。
+staff.post("/:id/reset-2fa", async (c) => {
+  const id = c.req.param("id");
+  const target = await c.env.DB.prepare("SELECT id FROM staff WHERE id = ?").bind(id).first();
+  if (!target) return c.json({ error: "Not found" }, 404);
+  await c.env.DB.batch([
+    c.env.DB.prepare("UPDATE staff SET totp_enabled = 0, totp_secret = NULL WHERE id = ?").bind(id),
+    c.env.DB.prepare("DELETE FROM recovery_codes WHERE staff_id = ?").bind(id),
+  ]);
+  return c.json({ ok: true });
+});
+
 export default staff;

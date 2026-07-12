@@ -1,7 +1,19 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { API_BASE_URL } from "@/lib/api";
+
+const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
+
+interface PublicClass {
+  id: string;
+  name: string;
+  weekday: number;
+  start_time: string;
+  end_time: string;
+  capacity: number | null;
+  remaining: number | null;
+}
 
 // ログイン不要の公開フォーム。体験・見学の申込を受け付け、
 // 管理画面の「体験予約」に「問い合わせ」として届く。
@@ -11,11 +23,20 @@ export default function TrialBookingPage() {
     guardian_name: "",
     contact: "",
     desired_date: "",
+    class_id: "",
     note: "",
   });
+  const [classes, setClasses] = useState<PublicClass[]>([]);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/api/trials/public-classes`)
+      .then((r) => r.json())
+      .then((d) => setClasses(d.classes ?? []))
+      .catch(() => setClasses([]));
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -30,10 +51,14 @@ export default function TrialBookingPage() {
           guardian_name: form.guardian_name || null,
           contact: form.contact || null,
           desired_date: form.desired_date || null,
+          class_id: form.class_id || null,
           note: form.note || null,
         }),
       });
-      if (!res.ok) throw new Error("送信に失敗しました。時間をおいて再度お試しください。");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "送信に失敗しました。時間をおいて再度お試しください。");
+      }
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "送信に失敗しました");
@@ -86,6 +111,29 @@ export default function TrialBookingPage() {
             required
           />
         </div>
+        {classes.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <label className="text-sm text-gray-600">ご希望のクラス(任意)</label>
+            <select
+              className="rounded border px-3 py-2"
+              value={form.class_id}
+              onChange={(e) => setForm({ ...form, class_id: e.target.value })}
+            >
+              <option value="">選択しない</option>
+              {classes.map((c) => {
+                const full = c.remaining !== null && c.remaining <= 0;
+                const seats =
+                  c.remaining === null ? "" : full ? "(満席)" : `(空き ${c.remaining})`;
+                return (
+                  <option key={c.id} value={c.id} disabled={full}>
+                    {WEEKDAYS[c.weekday]}曜 {c.start_time} {c.name} {seats}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        )}
+
         <div className="flex flex-col gap-1">
           <label className="text-sm text-gray-600">ご希望日(任意)</label>
           <input

@@ -23,15 +23,24 @@ function SettingsView() {
 
   // 2段階認証
   const [totpEnabled, setTotpEnabled] = useState<boolean | null>(null);
+  const [recoveryRemaining, setRecoveryRemaining] = useState(0);
   const [totpSetup, setTotpSetup] = useState<{ secret: string; qr: string } | null>(null);
   const [totpCode, setTotpCode] = useState("");
   const [totpMessage, setTotpMessage] = useState<string | null>(null);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
   const [disablePassword, setDisablePassword] = useState("");
 
-  useEffect(() => {
-    apiFetch<{ enabled: boolean }>("/api/auth/totp/status")
-      .then((r) => setTotpEnabled(r.enabled))
+  function refreshTotpStatus() {
+    apiFetch<{ enabled: boolean; recovery_codes_remaining: number }>("/api/auth/totp/status")
+      .then((r) => {
+        setTotpEnabled(r.enabled);
+        setRecoveryRemaining(r.recovery_codes_remaining);
+      })
       .catch(() => setTotpEnabled(false));
+  }
+
+  useEffect(() => {
+    refreshTotpStatus();
   }, []);
 
   async function startTotpSetup() {
@@ -46,17 +55,27 @@ function SettingsView() {
   async function enableTotp() {
     setTotpMessage(null);
     try {
-      await apiFetch("/api/auth/totp/enable", {
+      const res = await apiFetch<{ recovery_codes: string[] }>("/api/auth/totp/enable", {
         method: "POST",
         body: JSON.stringify({ code: totpCode.trim() }),
       });
       setTotpEnabled(true);
       setTotpSetup(null);
       setTotpCode("");
+      setRecoveryCodes(res.recovery_codes);
       setTotpMessage("2段階認証を有効にしました。次回ログインからコードが必要です。");
+      refreshTotpStatus();
     } catch (err) {
       setTotpMessage(err instanceof Error ? err.message : "有効化に失敗しました");
     }
+  }
+
+  async function regenerateRecoveryCodes() {
+    const res = await apiFetch<{ recovery_codes: string[] }>("/api/auth/totp/recovery-codes", {
+      method: "POST",
+    });
+    setRecoveryCodes(res.recovery_codes);
+    refreshTotpStatus();
   }
 
   async function disableTotp() {
@@ -67,8 +86,10 @@ function SettingsView() {
         body: JSON.stringify({ password: disablePassword }),
       });
       setTotpEnabled(false);
+      setRecoveryCodes(null);
       setDisablePassword("");
       setTotpMessage("2段階認証を無効にしました。");
+      refreshTotpStatus();
     } catch (err) {
       setTotpMessage(err instanceof Error ? err.message : "無効化に失敗しました");
     }
@@ -248,21 +269,47 @@ function SettingsView() {
           </div>
         )}
 
+        {recoveryCodes && (
+          <div className="mt-3 rounded border border-amber-300 bg-amber-50 p-3">
+            <p className="mb-1 text-sm font-semibold text-amber-900">
+              リカバリーコード(この画面を閉じると再表示できません)
+            </p>
+            <p className="mb-2 text-xs text-amber-800">
+              スマホを紛失したときは、ログイン画面のコード欄にこのいずれかを入力します。各コードは1回のみ有効です。安全な場所に保管してください。
+            </p>
+            <div className="grid grid-cols-2 gap-1 font-mono text-sm sm:grid-cols-4">
+              {recoveryCodes.map((rc) => (
+                <span key={rc} className="rounded bg-white px-2 py-1 text-center">
+                  {rc}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {totpEnabled === true && (
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="password"
-              className="rounded border px-3 py-2 text-sm"
-              placeholder="パスワード(確認用)"
-              value={disablePassword}
-              onChange={(e) => setDisablePassword(e.target.value)}
-            />
-            <button
-              onClick={disableTotp}
-              className="rounded border px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-            >
-              2段階認証を無効にする
-            </button>
+          <div className="mt-3 flex flex-col gap-2">
+            <p className="text-sm text-gray-500">
+              未使用のリカバリーコード: 残り {recoveryRemaining} 個
+              <button onClick={regenerateRecoveryCodes} className="ml-2 text-blue-600 hover:underline">
+                再発行する
+              </button>
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="password"
+                className="rounded border px-3 py-2 text-sm"
+                placeholder="パスワード(確認用)"
+                value={disablePassword}
+                onChange={(e) => setDisablePassword(e.target.value)}
+              />
+              <button
+                onClick={disableTotp}
+                className="rounded border px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+              >
+                2段階認証を無効にする
+              </button>
+            </div>
           </div>
         )}
         {totpMessage && <p className="mt-2 text-sm text-gray-700">{totpMessage}</p>}

@@ -72,6 +72,22 @@ function StaffView() {
     }
   }
 
+  async function handleReset2fa(row: StaffRow) {
+    if (
+      !confirm(
+        `${row.name} の2段階認証を解除しますか?端末の紛失時など、本人が再設定できるようにします。`
+      )
+    )
+      return;
+    setError(null);
+    try {
+      await apiFetch(`/api/staff/${row.id}/reset-2fa`, { method: "POST" });
+      alert(`${row.name} の2段階認証を解除しました。`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "解除に失敗しました");
+    }
+  }
+
   if (forbidden) {
     return (
       <main className="mx-auto max-w-3xl p-6">
@@ -108,14 +124,22 @@ function StaffView() {
                 <td className="py-2">{ROLE_LABELS[r.role]}</td>
                 <td className="py-2">{r.created_at}</td>
                 <td className="py-2 text-right">
-                  {r.id !== meId && (
+                  <div className="flex justify-end gap-3">
                     <button
-                      onClick={() => handleDelete(r)}
-                      className="text-xs text-red-600 hover:underline"
+                      onClick={() => handleReset2fa(r)}
+                      className="text-xs text-gray-600 hover:underline"
                     >
-                      削除
+                      2FA解除
                     </button>
-                  )}
+                    {r.id !== meId && (
+                      <button
+                        onClick={() => handleDelete(r)}
+                        className="text-xs text-red-600 hover:underline"
+                      >
+                        削除
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

@@ -4,10 +4,58 @@ import { z } from "zod";
 import type { Env, Variables } from "../types";
 import { requireAuth } from "../middleware/auth";
 import { hashPassword, verifyPassword } from "../lib/password";
-import { generateBase32Secret, verifyTotp, buildOtpAuthUri } from "../lib/totp";
-import { generateApiKey } from "../lib/id";
+import {
+  generateBase32Secret,
+  verifyTotp,
+  buildOtpAuthUri,
+  generateRecoveryCode,
+  hashRecoveryCode,
+} from "../lib/totp";
+import { generateApiKey, generateId } from "../lib/id";
 
 const auth = new Hono<{ Bindings: Env; Variables: Variables }>();
+
+const RECOVERY_CODE_COUNT = 8;
+
+// スタッフのリカバリーコードを作り直して保存し、平文の一覧を返す(表示は一度きり)。
+async function regenerateRecoveryCodes(env: Env, staffId: string): Promise<string[]> {
+  await env.DB.prepare("DELETE FROM recovery_codes WHERE staff_id = ?").bind(staffId).run();
+  const codes: string[] = [];
+  const statements = [];
+  for (let i = 0; i < RECOVERY_CODE_COUNT; i++) {
+    const code = generateRecoveryCode();
+    codes.push(code);
+    statements.push(
+      env.DB.prepare(
+        "INSERT INTO recovery_codes (id, staff_id, code_hash) VALUES (?, ?, ?)"
+      ).bind(generateId("rc"), staffId, await hashRecoveryCode(code))
+    );
+  }
+  await env.DB.batch(statements);
+  return codes;
+}
+
+// TOTPコード、またはリカバリーコードのどちらかで検証する。
+// リカバリーコードが一致した場合は使用済みにする(1回限り)。
+async function verifyTotpOrRecovery(
+  env: Env,
+  staffId: string,
+  secret: string,
+  code: string
+): Promise<boolean> {
+  if (await verifyTotp(secret, code)) return true;
+  const hash = await hashRecoveryCode(code);
+  const row = await env.DB.prepare(
+    "SELECT id FROM recovery_codes WHERE staff_id = ? AND code_hash = ? AND used_at IS NULL"
+  )
+    .bind(staffId, hash)
+    .first<{ id: string }>();
+  if (!row) return false;
+  await env.DB.prepare("UPDATE recovery_codes SET used_at = datetime('now') WHERE id = ?")
+    .bind(row.id)
+    .run();
+  return true;
+}
 
 // 名前＋パスワードでログインし、APIキーを取得する(APIキー不要)。
 // 認証自体は従来どおりAPIキーで行うため、ログイン後はこのキーを保存して使う。
@@ -40,8 +88,11 @@ auth.post(
           if (!code) {
             return c.json({ error: "認証コードを入力してください", totp_required: true }, 401);
           }
-          if (!(await verifyTotp(staff.totp_secret, code))) {
-            return c.json({ error: "認証コードが正しくありません", totp_required: true }, 401);
+          if (!(await verifyTotpOrRecovery(c.env, staff.id, staff.totp_secret, code))) {
+            return c.json(
+              { error: "認証コード(またはリカバリーコード)が正しくありません", totp_required: true },
+              401
+            );
           }
         }
         return c.json({
@@ -102,9 +153,24 @@ auth.post(
       return c.json({ error: "認証コードが正しくありません" }, 400);
     }
     await c.env.DB.prepare("UPDATE staff SET totp_enabled = 1 WHERE id = ?").bind(staff.id).run();
-    return c.json({ ok: true });
+    // 端末紛失時に備えたリカバリーコードを発行して返す(表示は一度きり)
+    const recoveryCodes = await regenerateRecoveryCodes(c.env, staff.id);
+    return c.json({ ok: true, recovery_codes: recoveryCodes });
   }
 );
+
+// リカバリーコードを再発行する(古いコードは無効になる)。
+auth.post("/totp/recovery-codes", requireAuth, async (c) => {
+  const staff = c.get("staff");
+  const row = await c.env.DB.prepare("SELECT totp_enabled FROM staff WHERE id = ?")
+    .bind(staff.id)
+    .first<{ totp_enabled: number }>();
+  if (row?.totp_enabled !== 1) {
+    return c.json({ error: "2段階認証が有効ではありません" }, 400);
+  }
+  const recoveryCodes = await regenerateRecoveryCodes(c.env, staff.id);
+  return c.json({ recovery_codes: recoveryCodes });
+});
 
 // 2段階認証を無効化する(パスワード再確認を必須にする)。
 auth.post(
@@ -119,20 +185,28 @@ auth.post(
     if (!row?.password_hash || !(await verifyPassword(c.req.valid("json").password, row.password_hash))) {
       return c.json({ error: "パスワードが正しくありません" }, 401);
     }
-    await c.env.DB.prepare("UPDATE staff SET totp_enabled = 0, totp_secret = NULL WHERE id = ?")
-      .bind(staff.id)
-      .run();
+    await c.env.DB.batch([
+      c.env.DB.prepare("UPDATE staff SET totp_enabled = 0, totp_secret = NULL WHERE id = ?").bind(
+        staff.id
+      ),
+      c.env.DB.prepare("DELETE FROM recovery_codes WHERE staff_id = ?").bind(staff.id),
+    ]);
     return c.json({ ok: true });
   }
 );
 
-// ログイン中スタッフの2段階認証の状態を返す。
+// ログイン中スタッフの2段階認証の状態(未使用リカバリーコード数を含む)を返す。
 auth.get("/totp/status", requireAuth, async (c) => {
   const staff = c.get("staff");
   const row = await c.env.DB.prepare("SELECT totp_enabled FROM staff WHERE id = ?")
     .bind(staff.id)
     .first<{ totp_enabled: number }>();
-  return c.json({ enabled: row?.totp_enabled === 1 });
+  const rc = await c.env.DB.prepare(
+    "SELECT COUNT(*) AS count FROM recovery_codes WHERE staff_id = ? AND used_at IS NULL"
+  )
+    .bind(staff.id)
+    .first<{ count: number }>();
+  return c.json({ enabled: row?.totp_enabled === 1, recovery_codes_remaining: rc?.count ?? 0 });
 });
 
 export default auth;

@@ -20,8 +20,45 @@ const publicInput = z.object({
   note: z.string().max(1000).nullable().optional(),
 });
 
+// クラスごとの占有状況(在籍＋予約確定の体験)と空き枠を計算する。
+// capacity が未設定のクラスは remaining = null(制限なし)。
+async function classAvailability(env: Env) {
+  const { results } = await env.DB.prepare(
+    `SELECT c.id, c.name, c.weekday, c.start_time, c.end_time, c.capacity,
+            (SELECT COUNT(*) FROM students s WHERE s.class_id = c.id AND s.status = '在籍') AS enrolled,
+            (SELECT COUNT(*) FROM trials t WHERE t.class_id = c.id AND t.status = '予約確定') AS reserved
+     FROM classes c
+     ORDER BY c.weekday, c.start_time`
+  ).all<{
+    id: string;
+    name: string;
+    weekday: number;
+    start_time: string;
+    end_time: string;
+    capacity: number | null;
+    enrolled: number;
+    reserved: number;
+  }>();
+  return (results ?? []).map((r) => ({
+    ...r,
+    remaining: r.capacity == null ? null : Math.max(r.capacity - r.enrolled - r.reserved, 0),
+  }));
+}
+
+// 公開フォーム用: 体験を受け付けられるクラスと空き枠を返す(APIキー不要)。
+trials.get("/public-classes", async (c) => {
+  return c.json({ classes: await classAvailability(c.env) });
+});
+
 trials.post("/public", zValidator("json", publicInput), async (c) => {
   const body = c.req.valid("json");
+  // クラス指定があり、そのクラスが満席なら受け付けない(枠押さえ)
+  if (body.class_id) {
+    const cls = (await classAvailability(c.env)).find((x) => x.id === body.class_id);
+    if (cls && cls.remaining !== null && cls.remaining <= 0) {
+      return c.json({ error: "選択されたクラスは満席です。別のクラスをお選びください。" }, 409);
+    }
+  }
   const id = generateId("trial");
   await c.env.DB.prepare(
     `INSERT INTO trials (id, student_name, guardian_name, contact, desired_date, class_id, note, status)

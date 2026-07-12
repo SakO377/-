@@ -70,6 +70,21 @@ export async function verifyTotp(secret: string, code: string, window = 1): Prom
   return false;
 }
 
+/** リカバリーコード(表示用)を生成する。例: "A3F9-K2M7"。 */
+export function generateRecoveryCode(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(5));
+  let s = "";
+  for (const b of bytes) s += BASE32_ALPHABET[b % 32];
+  return `${s.slice(0, 4)}-${s.slice(4)}${BASE32_ALPHABET[crypto.getRandomValues(new Uint8Array(1))[0] % 32]}`;
+}
+
+/** リカバリーコードはSHA-256でハッシュ化して保存する(入力が高エントロピーなため十分)。 */
+export async function hashRecoveryCode(code: string): Promise<string> {
+  const data = new TextEncoder().encode(code.trim().toUpperCase());
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 /** 認証アプリ登録用の otpauth URI を組み立てる。 */
 export function buildOtpAuthUri(secret: string, accountName: string, issuer = "School Harness"): string {
   const label = encodeURIComponent(`${issuer}:${accountName}`);
