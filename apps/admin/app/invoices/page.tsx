@@ -123,6 +123,44 @@ function InvoicesView() {
     }
   }
 
+  async function createBulk() {
+    if (
+      !window.confirm(
+        `${yearMonth} 分の請求書を、月謝が設定された在籍生徒へ一括作成します。\n(既にその月の請求書がある生徒はスキップします)`
+      )
+    )
+      return;
+    try {
+      const res = await apiFetch<{
+        created: number;
+        skipped_existing: number;
+        skipped_no_fee: number;
+      }>("/api/invoices/bulk", {
+        method: "POST",
+        body: JSON.stringify({ year_month: yearMonth }),
+      });
+      alert(
+        `作成: ${res.created} 件\n既存のためスキップ: ${res.skipped_existing} 件\n月謝未設定のためスキップ: ${res.skipped_no_fee} 件`
+      );
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "一括作成に失敗しました");
+    }
+  }
+
+  async function remindInvoice(id: string) {
+    await apiFetch(`/api/invoices/${id}/remind`, { method: "POST" });
+    alert("支払いリマインドを送信しました(LINE連携済みの保護者のみ)。");
+  }
+
+  async function remindAllUnpaid() {
+    if (!window.confirm("未入金のすべての保護者へ支払いリマインドを送りますか?")) return;
+    const res = await apiFetch<{ invoices: number; sent: number }>("/api/invoices/remind-unpaid", {
+      method: "POST",
+    });
+    alert(`対象 ${res.invoices} 件中、${res.sent} 件のLINE通知を送信しました。`);
+  }
+
   async function markPaid(id: string) {
     await apiFetch(`/api/invoices/${id}`, {
       method: "PATCH",
@@ -251,6 +289,33 @@ function InvoicesView() {
         </form>
       </section>
 
+      <section className="mb-6 rounded-lg border bg-gray-50 p-4">
+        <h2 className="mb-1 font-semibold">毎月の請求をまとめて</h2>
+        <p className="mb-3 text-sm text-gray-500">
+          月謝を登録済みの在籍生徒へ、当月分の請求書をワンクリックで一括作成できます。
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="month"
+            className="rounded border px-3 py-2 text-sm"
+            value={yearMonth}
+            onChange={(e) => setYearMonth(e.target.value)}
+          />
+          <button
+            onClick={createBulk}
+            className="rounded bg-black px-3 py-2 text-sm text-white"
+          >
+            当月分を一括作成
+          </button>
+          <button
+            onClick={remindAllUnpaid}
+            className="rounded border px-3 py-2 text-sm hover:bg-gray-100"
+          >
+            未入金をまとめて督促(LINE)
+          </button>
+        </div>
+      </section>
+
       <section>
         <h2 className="mb-2 font-semibold">請求書一覧</h2>
         {invoices.length === 0 && <p className="text-sm text-gray-500">まだ請求書がありません。</p>}
@@ -288,6 +353,14 @@ function InvoicesView() {
                           className="rounded border px-2 py-1 text-xs hover:bg-gray-50"
                         >
                           LINEで送信
+                        </button>
+                      )}
+                      {inv.paid_status !== "入金済" && (
+                        <button
+                          onClick={() => remindInvoice(inv.id)}
+                          className="rounded border px-2 py-1 text-xs hover:bg-gray-50"
+                        >
+                          督促
                         </button>
                       )}
                       {inv.paid_status !== "入金済" && (

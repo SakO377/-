@@ -62,6 +62,52 @@ invoices.post("/", zValidator("json", invoiceInput), async (c) => {
   return c.json(serializeInvoice(row!), 201);
 });
 
+// 当月分の請求書を在籍生徒へ一括作成する。月謝(monthly_fee)が設定された生徒が対象で、
+// その月の請求書が既にある生徒はスキップする(重複作成を防ぐ)。
+invoices.post(
+  "/bulk",
+  zValidator("json", z.object({ year_month: z.string().regex(/^\d{4}-\d{2}$/) })),
+  async (c) => {
+    const { year_month } = c.req.valid("json");
+
+    const { results: studentsRows } = await c.env.DB.prepare(
+      "SELECT id, monthly_fee FROM students WHERE status = '在籍'"
+    ).all<{ id: string; monthly_fee: number | null }>();
+
+    const { results: existingRows } = await c.env.DB.prepare(
+      "SELECT student_id FROM invoices WHERE year_month = ?"
+    )
+      .bind(year_month)
+      .all<{ student_id: string }>();
+    const existing = new Set((existingRows ?? []).map((r) => r.student_id));
+
+    let created = 0;
+    let skippedExisting = 0;
+    let skippedNoFee = 0;
+    const statements = [];
+    for (const s of studentsRows ?? []) {
+      if (existing.has(s.id)) {
+        skippedExisting += 1;
+        continue;
+      }
+      if (s.monthly_fee == null || s.monthly_fee <= 0) {
+        skippedNoFee += 1;
+        continue;
+      }
+      const items = JSON.stringify([{ label: "月謝", amount: s.monthly_fee }]);
+      statements.push(
+        c.env.DB.prepare(
+          "INSERT INTO invoices (id, student_id, year_month, items, total) VALUES (?, ?, ?, ?, ?)"
+        ).bind(generateId("invoice"), s.id, year_month, items, s.monthly_fee)
+      );
+      created += 1;
+    }
+    if (statements.length > 0) await c.env.DB.batch(statements);
+
+    return c.json({ created, skipped_existing: skippedExisting, skipped_no_fee: skippedNoFee });
+  }
+);
+
 invoices.get("/:id", async (c) => {
   const row = await c.env.DB.prepare(
     `SELECT i.*, s.name AS student_name FROM invoices i JOIN students s ON s.id = i.student_id WHERE i.id = ?`
@@ -164,6 +210,52 @@ invoices.post("/:id/send", async (c) => {
     await c.env.DB.prepare("UPDATE invoices SET sent_at = datetime('now') WHERE id = ?").bind(id).run();
   }
   return c.json({ send_result: result });
+});
+
+// 未入金の請求書について、保護者へLINEで支払いリマインドを送る。
+async function remindOne(
+  env: Env,
+  invoice: { id: string; student_id: string; year_month: string; total: number }
+) {
+  return notifyGuardiansOfStudent(env, invoice.student_id, "invoice_reminder", () => [
+    {
+      type: "text",
+      text: `${invoice.year_month}分のお月謝(¥${invoice.total.toLocaleString(
+        "ja-JP"
+      )})のお支払いがまだのようです。ご確認をお願いいたします。`,
+    },
+  ]);
+}
+
+invoices.post("/:id/remind", async (c) => {
+  const id = c.req.param("id");
+  const row = await c.env.DB.prepare("SELECT * FROM invoices WHERE id = ?").bind(id).first<{
+    id: string;
+    student_id: string;
+    year_month: string;
+    total: number;
+    paid_status: string;
+  }>();
+  if (!row) return c.json({ error: "Not found" }, 404);
+  if (row.paid_status === "入金済") return c.json({ error: "既に入金済みです" }, 409);
+  const result = await remindOne(c.env, row);
+  return c.json({ send_result: result });
+});
+
+// 未入金・一部入金の全請求書へまとめて支払いリマインドを送る。
+invoices.post("/remind-unpaid", async (c) => {
+  const { results } = await c.env.DB.prepare(
+    "SELECT id, student_id, year_month, total FROM invoices WHERE paid_status != '入金済'"
+  ).all<{ id: string; student_id: string; year_month: string; total: number }>();
+
+  let attempted = 0;
+  let sent = 0;
+  for (const row of results ?? []) {
+    const r = await remindOne(c.env, row);
+    attempted += r.attempted;
+    sent += r.sent;
+  }
+  return c.json({ invoices: (results ?? []).length, attempted, sent });
 });
 
 export default invoices;
