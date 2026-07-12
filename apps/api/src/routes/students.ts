@@ -20,6 +20,8 @@ const studentInput = z.object({
   tags: z.array(z.string()).optional(),
   metadata: z.record(z.unknown()).optional(),
   monthly_fee: z.number().int().nonnegative().nullable().optional(),
+  enrolled_at: z.string().nullable().optional(),
+  withdrawn_at: z.string().nullable().optional(),
 });
 
 // D1の行(rawなJSON文字列カラムを含む)をAPIレスポンス用に整形する
@@ -47,7 +49,8 @@ students.get("/", async (c) => {
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   // qr_token は入退室QRの秘密情報なので一覧では返さない
   const { results } = await c.env.DB.prepare(
-    `SELECT id, name, grade, course, class_id, status, tags, metadata, monthly_fee, created_at
+    `SELECT id, name, grade, course, class_id, status, tags, metadata, monthly_fee,
+            enrolled_at, withdrawn_at, created_at
      FROM students ${where} ORDER BY created_at DESC`
   )
     .bind(...params)
@@ -58,7 +61,8 @@ students.get("/", async (c) => {
 // 生徒名簿のCSVエクスポート(/:id より先に登録してルート衝突を避ける)
 students.get("/export.csv", async (c) => {
   const { results } = await c.env.DB.prepare(
-    `SELECT s.name, s.grade, s.course, c.name AS class_name, s.status, s.tags, s.monthly_fee, s.created_at
+    `SELECT s.name, s.grade, s.course, c.name AS class_name, s.status, s.tags, s.monthly_fee,
+            s.enrolled_at, s.withdrawn_at, s.created_at
      FROM students s LEFT JOIN classes c ON c.id = s.class_id
      ORDER BY s.created_at`
   ).all<{
@@ -69,10 +73,12 @@ students.get("/export.csv", async (c) => {
     status: string;
     tags: string | null;
     monthly_fee: number | null;
+    enrolled_at: string | null;
+    withdrawn_at: string | null;
     created_at: string;
   }>();
 
-  const header = "氏名,学年,コース,クラス,ステータス,タグ,月謝,登録日";
+  const header = "氏名,学年,コース,クラス,ステータス,タグ,月謝,入会日,退会日,登録日";
   const rows = (results ?? []).map((r) =>
     [
       r.name,
@@ -82,6 +88,8 @@ students.get("/export.csv", async (c) => {
       r.status,
       parseJsonArray(r.tags).join("|"),
       r.monthly_fee ?? "",
+      r.enrolled_at ?? "",
+      r.withdrawn_at ?? "",
       r.created_at,
     ]
       .map((v) => `"${String(v).replace(/"/g, '""')}"`)
@@ -178,9 +186,15 @@ students.post("/", zValidator("json", studentInput), async (c) => {
   const body = c.req.valid("json");
   const id = generateId("student");
   const qrToken = generateQrToken();
+  // 入会日は指定がなければ本日(日本時間)にする
+  const nowJst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const todayJst = `${nowJst.getUTCFullYear()}-${String(nowJst.getUTCMonth() + 1).padStart(
+    2,
+    "0"
+  )}-${String(nowJst.getUTCDate()).padStart(2, "0")}`;
   await c.env.DB.prepare(
-    `INSERT INTO students (id, name, grade, course, class_id, status, tags, metadata, qr_token, monthly_fee)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO students (id, name, grade, course, class_id, status, tags, metadata, qr_token, monthly_fee, enrolled_at, withdrawn_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
@@ -192,7 +206,9 @@ students.post("/", zValidator("json", studentInput), async (c) => {
       JSON.stringify(body.tags ?? []),
       JSON.stringify(body.metadata ?? {}),
       qrToken,
-      body.monthly_fee ?? null
+      body.monthly_fee ?? null,
+      body.enrolled_at ?? todayJst,
+      body.withdrawn_at ?? null
     )
     .run();
   const row = await c.env.DB.prepare("SELECT * FROM students WHERE id = ?").bind(id).first();
@@ -227,7 +243,11 @@ students.get("/:id", async (c) => {
 students.patch("/:id", zValidator("json", studentInput.partial()), async (c) => {
   const id = c.req.param("id");
   const body = c.req.valid("json");
-  const existing = await c.env.DB.prepare("SELECT id FROM students WHERE id = ?").bind(id).first();
+  const existing = await c.env.DB.prepare(
+    "SELECT id, status, withdrawn_at FROM students WHERE id = ?"
+  )
+    .bind(id)
+    .first<{ id: string; status: string; withdrawn_at: string | null }>();
   if (!existing) return c.json({ error: "Not found" }, 404);
 
   const fields: string[] = [];
@@ -263,6 +283,23 @@ students.patch("/:id", zValidator("json", studentInput.partial()), async (c) => 
   if (body.monthly_fee !== undefined) {
     fields.push("monthly_fee = ?");
     params.push(body.monthly_fee);
+  }
+  if (body.enrolled_at !== undefined) {
+    fields.push("enrolled_at = ?");
+    params.push(body.enrolled_at);
+  }
+  if (body.withdrawn_at !== undefined) {
+    fields.push("withdrawn_at = ?");
+    params.push(body.withdrawn_at);
+  } else if (body.status === "退会" && existing.status !== "退会" && !existing.withdrawn_at) {
+    // 退会に変更され、退会日が未設定なら本日(日本時間)を自動で入れる
+    const nowJst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const todayJst = `${nowJst.getUTCFullYear()}-${String(nowJst.getUTCMonth() + 1).padStart(
+      2,
+      "0"
+    )}-${String(nowJst.getUTCDate()).padStart(2, "0")}`;
+    fields.push("withdrawn_at = ?");
+    params.push(todayJst);
   }
   if (fields.length > 0) {
     params.push(id);

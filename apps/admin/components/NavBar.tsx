@@ -25,7 +25,6 @@ const links: { href: string; label: string; badge?: keyof BadgeMap }[] = [
   { href: "/trials", label: "体験予約" },
   { href: "/referrals", label: "紹介" },
   { href: "/staff", label: "スタッフ" },
-  { href: "/shifts", label: "シフト" },
   { href: "/settings", label: "設定" },
   { href: "/audit", label: "操作ログ" },
 ];

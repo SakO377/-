@@ -1,10 +1,17 @@
 "use client";
 
-import { useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import AuthGuard from "@/components/AuthGuard";
 import NavBar from "@/components/NavBar";
 import { apiFetch } from "@/lib/api";
+
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+}
 
 const GRADE_PRESETS = [
   "年少",
@@ -27,12 +34,26 @@ const GRADE_CUSTOM = "__custom__";
 
 function NewStudentForm() {
   const router = useRouter();
-  const [form, setForm] = useState({ name: "", grade: "", course: "", monthlyFee: "" });
+  const [form, setForm] = useState({
+    name: "",
+    grade: "",
+    course: "",
+    monthlyFee: "",
+    classId: "",
+    enrolledAt: todayStr(),
+  });
   const [gradeMode, setGradeMode] = useState<"preset" | typeof GRADE_CUSTOM>("preset");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
+  const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    apiFetch<{ classes: { id: string; name: string }[] }>("/api/classes")
+      .then((res) => setClasses(res.classes))
+      .catch(() => {});
+  }, []);
 
   function addTag() {
     const value = tagInput.trim();
@@ -66,7 +87,9 @@ function NewStudentForm() {
           name: form.name,
           grade: form.grade || null,
           course: form.course || null,
+          class_id: form.classId || null,
           monthly_fee: form.monthlyFee === "" ? null : Number(form.monthlyFee),
+          enrolled_at: form.enrolledAt || null,
           tags,
         }),
       });
@@ -129,6 +152,35 @@ function NewStudentForm() {
           value={form.course}
           onChange={(e) => setForm({ ...form, course: e.target.value })}
         />
+
+        <div className="flex flex-col gap-1">
+          <label className="text-sm text-gray-600">所属クラス</label>
+          <select
+            className="rounded border px-3 py-2"
+            value={form.classId}
+            onChange={(e) => setForm({ ...form, classId: e.target.value })}
+          >
+            <option value="">未所属</option>
+            {classes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-500">
+            「クラス」で登録済みのクラスから選べます(あとから変更できます)。
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-sm text-gray-600">入会日</label>
+          <input
+            type="date"
+            className="rounded border px-3 py-2"
+            value={form.enrolledAt}
+            onChange={(e) => setForm({ ...form, enrolledAt: e.target.value })}
+          />
+        </div>
 
         <div className="flex flex-col gap-1">
           <label className="text-sm text-gray-600">月謝(税込)</label>

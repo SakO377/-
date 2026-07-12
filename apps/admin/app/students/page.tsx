@@ -1,16 +1,43 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import AuthGuard from "@/components/AuthGuard";
 import NavBar from "@/components/NavBar";
 import { apiFetch, getApiKey, API_BASE_URL } from "@/lib/api";
-import type { Student } from "@school-harness/shared";
+import type { Student, StudentStatus } from "@school-harness/shared";
+
+type StatusFilter = "all" | StudentStatus;
+const STATUS_TABS: { key: StatusFilter; label: string }[] = [
+  { key: "all", label: "すべて" },
+  { key: "在籍", label: "在籍" },
+  { key: "休会", label: "休会" },
+  { key: "退会", label: "退会" },
+];
 
 function StudentsList() {
   const [students, setStudents] = useState<Student[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const filtered = useMemo(() => {
+    if (!students) return [];
+    const q = search.trim().toLowerCase();
+    return students.filter((s) => {
+      if (statusFilter !== "all" && s.status !== statusFilter) return false;
+      if (!q) return true;
+      const haystack = [s.name, s.grade ?? "", s.course ?? "", ...s.tags].join(" ").toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [students, search, statusFilter]);
+
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: students?.length ?? 0, 在籍: 0, 休会: 0, 退会: 0 };
+    for (const s of students ?? []) c[s.status] = (c[s.status] ?? 0) + 1;
+    return c;
+  }, [students]);
 
   function reload() {
     apiFetch<{ students: Student[] }>("/api/students")
@@ -125,37 +152,78 @@ function StudentsList() {
         </div>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {students && students.length > 0 && (
+        <>
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap gap-1">
+              {STATUS_TABS.map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => setStatusFilter(t.key)}
+                  className={`rounded-full px-3 py-1 text-sm ${
+                    statusFilter === t.key ? "bg-black text-white" : "bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  {t.label}
+                  <span className="ml-1 text-xs opacity-70">{counts[t.key] ?? 0}</span>
+                </button>
+              ))}
+            </div>
+            <input
+              className="rounded border px-3 py-1.5 text-sm sm:w-64"
+              placeholder="氏名・学年・コース・タグで検索"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+
+          {filtered.length === 0 ? (
+            <p className="text-gray-500">該当する生徒がいません。</p>
+          ) : (
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b text-left text-gray-500">
+                  <th className="py-2">氏名</th>
+                  <th className="py-2">学年</th>
+                  <th className="py-2">コース</th>
+                  <th className="py-2">ステータス</th>
+                  <th className="py-2">入会日</th>
+                  <th className="py-2">タグ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((s) => (
+                  <tr key={s.id} className="border-b hover:bg-gray-50">
+                    <td className="py-2">
+                      <Link
+                        href={`/students/detail?id=${s.id}`}
+                        className="text-blue-600 hover:underline"
+                      >
+                        {s.name}
+                      </Link>
+                    </td>
+                    <td className="py-2">{s.grade ?? "-"}</td>
+                    <td className="py-2">{s.course ?? "-"}</td>
+                    <td className="py-2">{s.status}</td>
+                    <td className="py-2 text-gray-500">
+                      {s.enrolled_at ?? "-"}
+                      {s.status === "退会" && s.withdrawn_at && (
+                        <span className="block text-xs text-gray-400">退会 {s.withdrawn_at}</span>
+                      )}
+                    </td>
+                    <td className="py-2">{s.tags.join(", ") || "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
+      )}
+
       {!students && !error && <p className="text-gray-500">読み込み中...</p>}
       {students && students.length === 0 && (
         <p className="text-gray-500">まだ生徒が登録されていません。</p>
-      )}
-      {students && students.length > 0 && (
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b text-left text-gray-500">
-              <th className="py-2">氏名</th>
-              <th className="py-2">学年</th>
-              <th className="py-2">コース</th>
-              <th className="py-2">ステータス</th>
-              <th className="py-2">タグ</th>
-            </tr>
-          </thead>
-          <tbody>
-            {students.map((s) => (
-              <tr key={s.id} className="border-b hover:bg-gray-50">
-                <td className="py-2">
-                  <Link href={`/students/detail?id=${s.id}`} className="text-blue-600 hover:underline">
-                    {s.name}
-                  </Link>
-                </td>
-                <td className="py-2">{s.grade ?? "-"}</td>
-                <td className="py-2">{s.course ?? "-"}</td>
-                <td className="py-2">{s.status}</td>
-                <td className="py-2">{s.tags.join(", ") || "-"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       )}
     </main>
   );

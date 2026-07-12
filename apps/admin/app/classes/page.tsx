@@ -7,6 +7,14 @@ import { apiFetch } from "@/lib/api";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
+// 全角数字(０-９)を半角に変換し、数字以外を除去する。
+// スマホのIMEで全角数字が入りがちな定員入力を、そのまま扱えるようにする。
+function toHalfWidthDigits(value: string): string {
+  return value
+    .replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
+    .replace(/[^0-9]/g, "");
+}
+
 interface ClassRow {
   id: string;
   name: string;
@@ -172,16 +180,20 @@ function ClassesView() {
           onChange={(e) => setForm({ ...form, end_time: e.target.value })}
         />
         <input
-          type="number"
+          type="text"
+          inputMode="numeric"
           className="w-24 rounded border px-3 py-2"
           placeholder="定員"
           value={form.capacity}
-          onChange={(e) => setForm({ ...form, capacity: e.target.value })}
+          onChange={(e) => setForm({ ...form, capacity: toHalfWidthDigits(e.target.value) })}
         />
         <button type="submit" className="rounded bg-black px-4 py-2 text-sm text-white">
           追加
         </button>
       </form>
+      <p className="mt-2 text-xs text-gray-500">
+        ※定員は半角数字で入力してください(全角で入力しても自動的に半角に変換されます)。
+      </p>
     </main>
   );
 }

@@ -38,6 +38,8 @@ export interface Student {
   tags: string[];
   metadata: Record<string, unknown>;
   monthly_fee: number | null;
+  enrolled_at: string | null;
+  withdrawn_at: string | null;
   created_at: string;
 }
 

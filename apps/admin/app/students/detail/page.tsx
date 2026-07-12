@@ -37,6 +37,8 @@ interface StudentDetail {
   tags: string[];
   qr_token: string | null;
   monthly_fee: number | null;
+  enrolled_at: string | null;
+  withdrawn_at: string | null;
   guardians: {
     id: string;
     name: string | null;
@@ -393,7 +395,14 @@ function StudentDetailView() {
   const [invite, setInvite] = useState<InviteCodeResult | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [monthlyFeeInput, setMonthlyFeeInput] = useState("");
-  const [basicForm, setBasicForm] = useState({ name: "", grade: "", course: "", class_id: "" });
+  const [basicForm, setBasicForm] = useState({
+    name: "",
+    grade: "",
+    course: "",
+    class_id: "",
+    enrolled_at: "",
+    withdrawn_at: "",
+  });
   const [gradeMode, setGradeMode] = useState<"preset" | typeof GRADE_CUSTOM>("preset");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
@@ -410,6 +419,8 @@ function StudentDetailView() {
         grade: res.grade ?? "",
         course: res.course ?? "",
         class_id: res.class_id ?? "",
+        enrolled_at: res.enrolled_at ?? "",
+        withdrawn_at: res.withdrawn_at ?? "",
       });
       setGradeMode(
         res.grade && !GRADE_PRESETS.includes(res.grade) ? GRADE_CUSTOM : "preset"
@@ -499,6 +510,8 @@ function StudentDetailView() {
         grade: basicForm.grade || null,
         course: basicForm.course || null,
         class_id: basicForm.class_id || null,
+        enrolled_at: basicForm.enrolled_at || null,
+        withdrawn_at: basicForm.withdrawn_at || null,
         tags,
       }),
     });
@@ -508,6 +521,8 @@ function StudentDetailView() {
       grade: res.grade,
       course: res.course,
       class_id: res.class_id,
+      enrolled_at: res.enrolled_at,
+      withdrawn_at: res.withdrawn_at,
       tags: res.tags,
     });
     setBasicSaved(true);
@@ -604,6 +619,30 @@ function StudentDetailView() {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="flex gap-3">
+            <div className="flex flex-1 flex-col gap-1">
+              <label className="text-sm text-gray-600">入会日</label>
+              <input
+                type="date"
+                className="rounded border px-3 py-2"
+                value={basicForm.enrolled_at}
+                onChange={(e) => setBasicForm({ ...basicForm, enrolled_at: e.target.value })}
+              />
+            </div>
+            <div className="flex flex-1 flex-col gap-1">
+              <label className="text-sm text-gray-600">退会日</label>
+              <input
+                type="date"
+                className="rounded border px-3 py-2"
+                value={basicForm.withdrawn_at}
+                onChange={(e) => setBasicForm({ ...basicForm, withdrawn_at: e.target.value })}
+              />
+              <p className="text-xs text-gray-500">
+                ステータスを「退会」にすると自動で入ります(手動でも変更可)。
+              </p>
+            </div>
           </div>
 
           <div className="flex flex-col gap-1">

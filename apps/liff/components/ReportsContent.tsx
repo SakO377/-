@@ -12,6 +12,17 @@ interface ReportRow {
   author: string | null;
   body: string;
   read_at: string | null;
+  sent_at: string | null;
+  created_at: string;
+}
+
+// "YYYY-MM-DD HH:MM:SS"(UTC) を日本時間の「M月D日」に整形する
+function formatDate(value: string | null): string {
+  if (!value) return "";
+  const d = new Date(value.replace(" ", "T") + "Z");
+  if (Number.isNaN(d.getTime())) return "";
+  const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  return `${jst.getUTCFullYear()}年${jst.getUTCMonth() + 1}月${jst.getUTCDate()}日`;
 }
 
 export default function ReportsContent({
@@ -78,6 +89,7 @@ export default function ReportsContent({
             onClick={() => !r.read_at && markRead(r.id)}
             className="rounded border p-3 text-sm"
           >
+            <p className="text-xs text-gray-500">{formatDate(r.sent_at ?? r.created_at)}</p>
             <p className="font-semibold">
               {r.student_name}
               {r.author ? ` / ${r.author}` : ""}

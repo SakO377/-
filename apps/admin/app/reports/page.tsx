@@ -143,56 +143,71 @@ function ReportsView() {
         </section>
       )}
 
-      <section className="mb-8">
-        <h2 className="mb-2 font-semibold">テンプレート</h2>
-        <p className="mb-2 text-sm text-gray-500">
-          よく使う定型文を登録しておくと、報告書を書くときにワンタップで本文に差し込めます。
+      <section className="mb-8 rounded-lg border bg-gray-50 p-4">
+        <h2 className="mb-1 font-semibold">テンプレート(任意・最初に一度だけ用意)</h2>
+        <p className="mb-1 text-sm text-gray-600">
+          毎回ゼロから書かずに済むよう、「よく使う書き出し・項目」をひな形として登録しておく機能です。
+          登録は任意で、使わなくても報告書は作成できます。
         </p>
+        <p className="mb-3 text-sm text-gray-500">
+          下の「報告書を作成」でテンプレートを選ぶと、その内容が本文欄に自動で入り、あとは空欄を埋めるだけで完成します。
+        </p>
+
         {templates.length > 0 && (
-          <ul className="mb-3 flex flex-wrap gap-2 text-sm">
-            {templates.map((t) => (
-              <li key={t.id} className="flex items-center gap-2 rounded border px-2 py-1">
-                <span>
-                  {t.name}
-                  {t.subject ? <span className="text-gray-400"> / {t.subject}</span> : null}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => deleteTemplate(t.id)}
-                  className="text-gray-400 hover:text-red-600"
-                  aria-label={`${t.name}を削除`}
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-          </ul>
+          <div className="mb-3">
+            <p className="mb-1 text-xs font-semibold text-gray-500">登録済みのテンプレート</p>
+            <ul className="flex flex-wrap gap-2 text-sm">
+              {templates.map((t) => (
+                <li key={t.id} className="flex items-center gap-2 rounded border bg-white px-2 py-1">
+                  <span>
+                    {t.name}
+                    {t.subject ? <span className="text-gray-400"> / {t.subject}</span> : null}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => deleteTemplate(t.id)}
+                    className="text-gray-400 hover:text-red-600"
+                    aria-label={`${t.name}を削除`}
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
-        <form onSubmit={addTemplate} className="flex flex-wrap gap-2">
-          <input
-            className="rounded border px-3 py-2 text-sm"
-            placeholder="テンプレート名"
-            value={templateForm.name}
-            onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })}
-            required
-          />
-          <input
-            className="rounded border px-3 py-2 text-sm"
-            placeholder="教科(任意)"
-            value={templateForm.subject}
-            onChange={(e) => setTemplateForm({ ...templateForm, subject: e.target.value })}
-          />
-          <input
-            className="min-w-[240px] flex-1 rounded border px-3 py-2 text-sm"
-            placeholder="本文テンプレート"
-            value={templateForm.body_template}
-            onChange={(e) => setTemplateForm({ ...templateForm, body_template: e.target.value })}
-            required
-          />
-          <button type="submit" className="rounded bg-black px-3 py-2 text-sm text-white">
-            追加
-          </button>
-        </form>
+
+        <details className="text-sm">
+          <summary className="cursor-pointer text-blue-600">＋ 新しいテンプレートを登録する</summary>
+          <form onSubmit={addTemplate} className="mt-3 flex flex-col gap-2">
+            <div className="flex flex-wrap gap-2">
+              <input
+                className="rounded border px-3 py-2 text-sm"
+                placeholder="テンプレート名(例: 通常授業レポート)"
+                value={templateForm.name}
+                onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })}
+                required
+              />
+              <input
+                className="rounded border px-3 py-2 text-sm"
+                placeholder="教科(任意・例: 算数)"
+                value={templateForm.subject}
+                onChange={(e) => setTemplateForm({ ...templateForm, subject: e.target.value })}
+              />
+            </div>
+            <textarea
+              className="rounded border px-3 py-2 text-sm"
+              rows={5}
+              placeholder={"本文のひな形(例)\n本日の単元: \n理解度: \n宿題: \n次回までの目標: "}
+              value={templateForm.body_template}
+              onChange={(e) => setTemplateForm({ ...templateForm, body_template: e.target.value })}
+              required
+            />
+            <button type="submit" className="self-start rounded bg-black px-3 py-2 text-sm text-white">
+              このテンプレートを登録
+            </button>
+          </form>
+        </details>
       </section>
 
       <section className="mb-8">
