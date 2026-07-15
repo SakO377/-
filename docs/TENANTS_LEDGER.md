@@ -38,17 +38,26 @@
 ## 運用メモ
 
 ### 環境の作り方(新規1軒)
-1. Cloudflareで D1 を作成 → `wrangler d1 create sh-<教室ID>`。出力の `database_id` を控える。
-2. `tenants/example.json` をコピーして `tenants/<教室ID>.json` を作り、値を埋める。
-3. 顧客にLINE公式アカウント作成 + Messaging API有効化をしてもらう(SMS認証は本人のみ)。
+
+**推奨: 半自動スクリプトを使う**(D1作成・Pages作成・設定生成・初回デプロイ・オーナー作成まで)
+```
+export CLOUDFLARE_API_TOKEN=xxxxx CLOUDFLARE_ACCOUNT_ID=xxxxx
+node scripts/new-tenant.mjs <slug> "教室名"
+# 例: node scripts/new-tenant.mjs mirai-juku "みらい学習教室"
+```
+実行後、管理画面はすぐ使えます(生徒登録などが可能)。オーナーAPIキーが表示されるので安全に顧客へ渡します。
+
+**残りの手動作業(LINE連携)**
+1. 顧客にLINE公式アカウント作成 + Messaging API有効化をしてもらう(SMS認証は本人のみ)。
    Webhook・LIFF・トークン発行は管理者に招待してもらいこちらで実施。
-4. Workerにシークレットを設定:
+2. Workerにシークレットを設定(`--name` でそのテナントのWorkerを指定):
    ```
-   printf '<token>' | wrangler secret put LINE_CHANNEL_ACCESS_TOKEN --config apps/api/.tenant.<教室ID>.toml
-   printf '<secret>' | wrangler secret put LINE_CHANNEL_SECRET --config apps/api/.tenant.<教室ID>.toml
+   printf '<token>'  | npx wrangler secret put LINE_CHANNEL_ACCESS_TOKEN --name sh-<slug>-api
+   printf '<secret>' | npx wrangler secret put LINE_CHANNEL_SECRET      --name sh-<slug>-api
    ```
-   ※`.tenant.<教室ID>.toml` は下記デプロイスクリプトが生成するので、一度デプロイした後に設定する。
-5. 初回デプロイ + 最初のオーナー作成(`POST /api/setup/init`)。オーナーAPIキーを安全に顧客へ渡す。
+3. LINEログインチャネル + LIFFアプリを作成し、`tenants/<slug>.json` の
+   `line.liff_id` と `line.login_channel_id` を実際の値に更新。
+4. LIFFを含めて再デプロイ: `node scripts/deploy-tenant.mjs <slug>`
 
 ### 更新の仕方(コード改善を反映)
 ```

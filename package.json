@@ -10,6 +10,7 @@
   },
   "scripts": {
     "setup": "node scripts/setup.mjs",
+    "new:tenant": "node scripts/new-tenant.mjs",
     "deploy:tenant": "node scripts/deploy-tenant.mjs",
     "dev:api": "pnpm --filter @school-harness/api dev",
     "dev:admin": "pnpm --filter @school-harness/admin dev",
