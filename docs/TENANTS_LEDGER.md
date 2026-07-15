@@ -58,6 +58,7 @@ node scripts/new-tenant.mjs <slug> "教室名"
 3. LINEログインチャネル + LIFFアプリを作成し、`tenants/<slug>.json` の
    `line.liff_id` と `line.login_channel_id` を実際の値に更新。
 4. LIFFを含めて再デプロイ: `node scripts/deploy-tenant.mjs <slug>`
+5. 疎通確認: `node scripts/check-tenant.mjs <slug>`(全項目 ✅ を確認)
 
 ### 更新の仕方(コード改善を反映)
 ```
@@ -73,6 +74,13 @@ node scripts/deploy-tenant.mjs all --yes
 # 管理画面だけ / マイグレーションなし、など部分更新
 node scripts/deploy-tenant.mjs <教室ID> --only=admin --skip-migrate
 ```
+
+### 疎通確認(導入後・更新後)
+```
+node scripts/check-tenant.mjs <教室ID>   # 1軒
+node scripts/check-tenant.mjs all         # 全教室(異常があれば終了コード1)
+```
+API・DB・管理画面・LIFF・LINE設定状況を ✅/⚠️/❌ で表示します。
 
 ### 破壊的変更・DBスキーマ変更のとき
 - 列の追加(マイグレーション)は安全。列の削除・型変更は既存データに影響するので、
