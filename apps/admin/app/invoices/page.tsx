@@ -26,6 +26,7 @@ interface InvoiceRow {
   total: number;
   paid_status: "未入金" | "入金済" | "一部入金";
   sent_at: string | null;
+  payment_reported_at: string | null;
 }
 
 function currentYearMonth() {
@@ -337,7 +338,17 @@ function InvoicesView() {
                   <td className="py-2">{inv.year_month}</td>
                   <td className="py-2">{inv.student_name}</td>
                   <td className="py-2">¥{inv.total.toLocaleString("ja-JP")}</td>
-                  <td className="py-2">{inv.paid_status}</td>
+                  <td className="py-2">
+                    {inv.paid_status === "入金済" ? (
+                      inv.paid_status
+                    ) : inv.payment_reported_at ? (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
+                        入金確認待ち
+                      </span>
+                    ) : (
+                      inv.paid_status
+                    )}
+                  </td>
                   <td className="py-2">{inv.sent_at ? "送信済み" : "未送信"}</td>
                   <td className="py-2">
                     <div className="flex flex-wrap gap-1">
@@ -368,7 +379,7 @@ function InvoicesView() {
                           onClick={() => markPaid(inv.id)}
                           className="rounded bg-black px-2 py-1 text-xs text-white"
                         >
-                          入金済みにする
+                          {inv.payment_reported_at ? "入金を確認" : "入金済みにする"}
                         </button>
                       )}
                     </div>

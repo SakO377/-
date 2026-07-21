@@ -6,6 +6,7 @@ import { verifyLineIdToken, type VerifiedLineUser } from "../lib/line";
 import { generateId } from "../lib/id";
 import { parseJsonArray, parseJsonObject } from "../lib/json";
 import { renderInvoiceHtml } from "../lib/invoice-html";
+import { getSetting } from "../lib/notify";
 
 const liff = new Hono<{ Bindings: Env }>();
 
@@ -438,7 +439,8 @@ liff.get("/invoices", async (c) => {
   if (!guardian) return c.json({ error: "認証に失敗しました" }, 401);
 
   const { results } = await c.env.DB.prepare(
-    `SELECT i.id, i.year_month, i.total, i.paid_status, i.sent_at, s.name AS student_name
+    `SELECT i.id, i.year_month, i.total, i.paid_status, i.sent_at, i.payment_reported_at,
+            s.name AS student_name
      FROM invoices i
      JOIN students s ON s.id = i.student_id
      JOIN student_guardians sg ON sg.student_id = i.student_id
@@ -450,6 +452,50 @@ liff.get("/invoices", async (c) => {
 
   return c.json({ invoices: results ?? [] });
 });
+
+// 振込先口座の情報(教室が設定画面で登録したもの)を保護者に見せる
+liff.get("/payment-info", async (c) => {
+  const guardian = await requireGuardian(c);
+  if (!guardian) return c.json({ error: "認証に失敗しました" }, 401);
+  const bank = {
+    bank_name: await getSetting(c.env, "bank_name", ""),
+    bank_branch: await getSetting(c.env, "bank_branch", ""),
+    bank_account_type: await getSetting(c.env, "bank_account_type", ""),
+    bank_account_number: await getSetting(c.env, "bank_account_number", ""),
+    bank_account_holder: await getSetting(c.env, "bank_account_holder", ""),
+    payment_note: await getSetting(c.env, "payment_note", ""),
+  };
+  const configured = Boolean(bank.bank_name || bank.bank_account_number);
+  return c.json({ bank_transfer: bank, configured });
+});
+
+// 保護者が「振り込みました」と報告する。paid_status は変えず(教室の確認前なので)、
+// 報告時刻とメモだけ記録して「入金確認待ち」の状態にする。
+liff.post(
+  "/invoices/:id/report-payment",
+  zValidator("json", z.object({ note: z.string().max(200).nullable().optional() })),
+  async (c) => {
+    const guardian = await requireGuardian(c);
+    if (!guardian) return c.json({ error: "認証に失敗しました" }, 401);
+    const id = c.req.param("id");
+    const row = await c.env.DB.prepare(
+      `SELECT i.id, i.paid_status FROM invoices i
+       JOIN student_guardians sg ON sg.student_id = i.student_id
+       WHERE i.id = ? AND sg.guardian_id = ?`
+    )
+      .bind(id, guardian.id)
+      .first<{ id: string; paid_status: string }>();
+    if (!row) return c.json({ error: "Not found" }, 404);
+    if (row.paid_status === "入金済") return c.json({ error: "既に入金済みです" }, 409);
+
+    await c.env.DB.prepare(
+      "UPDATE invoices SET payment_reported_at = datetime('now'), payment_report_note = ? WHERE id = ?"
+    )
+      .bind(c.req.valid("json").note ?? null, id)
+      .run();
+    return c.json({ ok: true });
+  }
+);
 
 liff.get("/invoices/:id/print", async (c) => {
   const guardian = await requireGuardian(c);

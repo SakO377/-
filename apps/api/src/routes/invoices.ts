@@ -127,7 +127,9 @@ const invoiceUpdate = z.object({
 invoices.patch("/:id", zValidator("json", invoiceUpdate), async (c) => {
   const id = c.req.param("id");
   const body = c.req.valid("json");
-  const existing = await c.env.DB.prepare("SELECT id FROM invoices WHERE id = ?").bind(id).first();
+  const existing = await c.env.DB.prepare("SELECT id, student_id, paid_status FROM invoices WHERE id = ?")
+    .bind(id)
+    .first<{ id: string; student_id: string; paid_status: string }>();
   if (!existing) return c.json({ error: "Not found" }, 404);
 
   const fields: string[] = [];
@@ -151,6 +153,14 @@ invoices.patch("/:id", zValidator("json", invoiceUpdate), async (c) => {
       .bind(...params)
       .run();
   }
+
+  // 入金済みに切り替わったら、保護者へ確認完了をLINEで知らせる
+  if (body.paid_status === "入金済" && existing.paid_status !== "入金済") {
+    await notifyGuardiansOfStudent(c.env, existing.student_id, "payment_confirmed", () => [
+      { type: "text", text: "お支払いを確認しました。ありがとうございました。" },
+    ]);
+  }
+
   const row = await c.env.DB.prepare("SELECT * FROM invoices WHERE id = ?")
     .bind(id)
     .first<Record<string, unknown>>();

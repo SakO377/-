@@ -6,11 +6,21 @@ import AuthGuard from "@/components/AuthGuard";
 import NavBar from "@/components/NavBar";
 import { apiFetch, setApiKey } from "@/lib/api";
 
+interface BankTransfer {
+  bank_name: string;
+  bank_branch: string;
+  bank_account_type: string;
+  bank_account_number: string;
+  bank_account_holder: string;
+  payment_note: string;
+}
+
 interface SettingsData {
   attendance_push_enabled: boolean;
   inquiry_auto_reply_enabled: boolean;
   inquiry_auto_reply_text: string;
   enrollment_guide_text: string;
+  bank_transfer: BankTransfer;
   line_quota: { used: number; quota: number; remaining: number };
 }
 
@@ -125,12 +135,29 @@ function SettingsView() {
     }
   }
 
+  const [bankForm, setBankForm] = useState<BankTransfer | null>(null);
+  const [bankSaved, setBankSaved] = useState(false);
+
   async function load() {
     try {
-      setData(await apiFetch<SettingsData>("/api/settings"));
+      const res = await apiFetch<SettingsData>("/api/settings");
+      setData(res);
+      setBankForm(res.bank_transfer);
     } catch (err) {
       setError(err instanceof Error ? err.message : "読み込みに失敗しました");
     }
+  }
+
+  async function saveBank() {
+    if (!bankForm) return;
+    setBankSaved(false);
+    const res = await apiFetch<SettingsData>("/api/settings", {
+      method: "PATCH",
+      body: JSON.stringify({ bank_transfer: bankForm }),
+    });
+    setData(res);
+    setBankForm(res.bank_transfer);
+    setBankSaved(true);
   }
 
   useEffect(() => {
@@ -324,6 +351,61 @@ function SettingsView() {
           APIキーを再発行する
         </button>
       </section>
+
+      {bankForm && (
+        <section className="mb-6 rounded-lg border p-4">
+          <h2 className="mb-2 font-semibold">振込先口座(月謝の受け取り)</h2>
+          <p className="mb-3 text-sm text-gray-500">
+            ここに登録した口座が、保護者のLINE(請求画面)に表示されます。保護者は振込後に
+            「振り込みました」と報告でき、こちらで確認して入金済みにできます。
+          </p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <input
+              className="rounded border px-3 py-2 text-sm"
+              placeholder="銀行名(例: ○○銀行)"
+              value={bankForm.bank_name}
+              onChange={(e) => setBankForm({ ...bankForm, bank_name: e.target.value })}
+            />
+            <input
+              className="rounded border px-3 py-2 text-sm"
+              placeholder="支店名(例: ○○支店)"
+              value={bankForm.bank_branch}
+              onChange={(e) => setBankForm({ ...bankForm, bank_branch: e.target.value })}
+            />
+            <input
+              className="rounded border px-3 py-2 text-sm"
+              placeholder="種別(例: 普通)"
+              value={bankForm.bank_account_type}
+              onChange={(e) => setBankForm({ ...bankForm, bank_account_type: e.target.value })}
+            />
+            <input
+              className="rounded border px-3 py-2 text-sm"
+              placeholder="口座番号"
+              value={bankForm.bank_account_number}
+              onChange={(e) => setBankForm({ ...bankForm, bank_account_number: e.target.value })}
+            />
+            <input
+              className="rounded border px-3 py-2 text-sm sm:col-span-2"
+              placeholder="口座名義(例: ガッコウ ハーネス)"
+              value={bankForm.bank_account_holder}
+              onChange={(e) => setBankForm({ ...bankForm, bank_account_holder: e.target.value })}
+            />
+            <textarea
+              className="rounded border px-3 py-2 text-sm sm:col-span-2"
+              rows={2}
+              placeholder="補足(例: 振込時はお子さまのお名前でお願いします)"
+              value={bankForm.payment_note}
+              onChange={(e) => setBankForm({ ...bankForm, payment_note: e.target.value })}
+            />
+          </div>
+          <div className="mt-2 flex items-center gap-3">
+            <button onClick={saveBank} className="rounded bg-black px-3 py-2 text-sm text-white">
+              振込先を保存
+            </button>
+            {bankSaved && <span className="text-sm text-green-600">保存しました</span>}
+          </div>
+        </section>
+      )}
 
       <section className="rounded-lg border p-4 text-sm text-gray-600">
         LINE無料メッセージ枠(今月): {data.line_quota.used} / {data.line_quota.quota} 通(残り{" "}
