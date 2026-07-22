@@ -11,6 +11,13 @@ interface InvoiceItem {
   amount: number;
 }
 
+// 編集中の明細。percent を持つ行は「割合割引」で、金額は他の項目合計から自動計算する。
+interface EditableItem {
+  label: string;
+  amount: number;
+  percent?: number;
+}
+
 interface InvoiceRow {
   id: string;
   student_name: string;
@@ -19,6 +26,7 @@ interface InvoiceRow {
   total: number;
   paid_status: "未入金" | "入金済" | "一部入金";
   sent_at: string | null;
+  payment_reported_at: string | null;
 }
 
 function currentYearMonth() {
@@ -32,7 +40,7 @@ function InvoicesView() {
   const [error, setError] = useState<string | null>(null);
   const [studentId, setStudentId] = useState("");
   const [yearMonth, setYearMonth] = useState(currentYearMonth());
-  const [items, setItems] = useState<InvoiceItem[]>([{ label: "月謝", amount: 0 }]);
+  const [items, setItems] = useState<EditableItem[]>([{ label: "月謝", amount: 0 }]);
 
   async function load() {
     try {
@@ -42,7 +50,15 @@ function InvoicesView() {
       ]);
       setStudents(studentsRes.students);
       setInvoices(invoicesRes.invoices);
-      setStudentId((id) => id || studentsRes.students[0]?.id || "");
+      // 初期選択の生徒の月謝を明細に反映する(未選択時のみ)
+      setStudentId((id) => {
+        const nextId = id || studentsRes.students[0]?.id || "";
+        if (!id) {
+          const first = studentsRes.students.find((s) => s.id === nextId);
+          if (first?.monthly_fee) setItems([{ label: "月謝", amount: first.monthly_fee }]);
+        }
+        return nextId;
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "読み込みに失敗しました");
     }
@@ -60,7 +76,7 @@ function InvoicesView() {
     }
   }
 
-  function updateItem(index: number, patch: Partial<InvoiceItem>) {
+  function updateItem(index: number, patch: Partial<EditableItem>) {
     setItems((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
   }
 
@@ -68,22 +84,82 @@ function InvoicesView() {
     setItems((prev) => [...prev, { label: "", amount: 0 }]);
   }
 
+  function addPercentDiscount() {
+    setItems((prev) => [...prev, { label: "割引", amount: 0, percent: 10 }]);
+  }
+
   function removeItem(index: number) {
     setItems((prev) => prev.filter((_, i) => i !== index));
   }
+
+  // 割合割引の基準額(percentを持たない項目の合計)
+  const baseAmount = items
+    .filter((it) => it.percent === undefined)
+    .reduce((sum, it) => sum + (Number.isFinite(it.amount) ? it.amount : 0), 0);
+
+  // 編集中の明細を、実際に送信・表示する {label, amount} に確定する。
+  // 割合割引は基準額から金額を計算し、ラベルに割合を明記する。
+  function resolveItem(it: EditableItem): InvoiceItem {
+    if (it.percent !== undefined) {
+      const pct = Number.isFinite(it.percent) ? it.percent : 0;
+      const base = it.label.trim() || "割引";
+      return { label: `${base} (${pct}%)`, amount: -Math.round((baseAmount * pct) / 100) };
+    }
+    return { label: it.label, amount: Number.isFinite(it.amount) ? it.amount : 0 };
+  }
+
+  const computedItems = items.map(resolveItem);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     try {
       await apiFetch("/api/invoices", {
         method: "POST",
-        body: JSON.stringify({ student_id: studentId, year_month: yearMonth, items }),
+        body: JSON.stringify({ student_id: studentId, year_month: yearMonth, items: computedItems }),
       });
       setItems([{ label: "月謝", amount: 0 }]);
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "作成に失敗しました");
     }
+  }
+
+  async function createBulk() {
+    if (
+      !window.confirm(
+        `${yearMonth} 分の請求書を、月謝が設定された在籍生徒へ一括作成します。\n(既にその月の請求書がある生徒はスキップします)`
+      )
+    )
+      return;
+    try {
+      const res = await apiFetch<{
+        created: number;
+        skipped_existing: number;
+        skipped_no_fee: number;
+      }>("/api/invoices/bulk", {
+        method: "POST",
+        body: JSON.stringify({ year_month: yearMonth }),
+      });
+      alert(
+        `作成: ${res.created} 件\n既存のためスキップ: ${res.skipped_existing} 件\n月謝未設定のためスキップ: ${res.skipped_no_fee} 件`
+      );
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "一括作成に失敗しました");
+    }
+  }
+
+  async function remindInvoice(id: string) {
+    await apiFetch(`/api/invoices/${id}/remind`, { method: "POST" });
+    alert("支払いリマインドを送信しました(LINE連携済みの保護者のみ)。");
+  }
+
+  async function remindAllUnpaid() {
+    if (!window.confirm("未入金のすべての保護者へ支払いリマインドを送りますか?")) return;
+    const res = await apiFetch<{ invoices: number; sent: number }>("/api/invoices/remind-unpaid", {
+      method: "POST",
+    });
+    alert(`対象 ${res.invoices} 件中、${res.sent} 件のLINE通知を送信しました。`);
   }
 
   async function markPaid(id: string) {
@@ -110,7 +186,7 @@ function InvoicesView() {
     window.open(url, "_blank");
   }
 
-  const total = items.reduce((sum, item) => sum + (Number.isFinite(item.amount) ? item.amount : 0), 0);
+  const total = computedItems.reduce((sum, item) => sum + item.amount, 0);
 
   return (
     <main className="mx-auto max-w-3xl p-6">
@@ -142,22 +218,41 @@ function InvoicesView() {
 
           <div className="flex flex-col gap-2">
             {items.map((item, i) => (
-              <div key={i} className="flex gap-2">
+              <div key={i} className="flex items-center gap-2">
                 <input
                   className="flex-1 rounded border px-3 py-2 text-sm"
-                  placeholder="項目名(例: 月謝、兄弟割引)"
+                  placeholder={item.percent !== undefined ? "割引名(例: 兄弟割引)" : "項目名(例: 月謝、教材費)"}
                   value={item.label}
                   onChange={(e) => updateItem(i, { label: e.target.value })}
                   required
                 />
-                <input
-                  type="number"
-                  step="100"
-                  className="w-32 rounded border px-3 py-2 text-sm"
-                  value={item.amount}
-                  onChange={(e) => updateItem(i, { amount: Number(e.target.value) })}
-                  required
-                />
+                {item.percent !== undefined ? (
+                  <div className="flex w-32 items-center gap-1">
+                    <input
+                      type="number"
+                      step="1"
+                      min="0"
+                      max="100"
+                      className="w-16 rounded border px-2 py-2 text-sm"
+                      value={item.percent}
+                      onChange={(e) => updateItem(i, { percent: Number(e.target.value) })}
+                      required
+                    />
+                    <span className="text-sm text-gray-500">%</span>
+                    <span className="ml-auto text-xs text-gray-500">
+                      {resolveItem(item).amount.toLocaleString("ja-JP")}
+                    </span>
+                  </div>
+                ) : (
+                  <input
+                    type="number"
+                    step="100"
+                    className="w-32 rounded border px-3 py-2 text-sm"
+                    value={item.amount}
+                    onChange={(e) => updateItem(i, { amount: Number(e.target.value) })}
+                    required
+                  />
+                )}
                 {items.length > 1 && (
                   <button
                     type="button"
@@ -169,13 +264,22 @@ function InvoicesView() {
                 )}
               </div>
             ))}
-            <button
-              type="button"
-              onClick={addItem}
-              className="self-start text-sm text-blue-600 hover:underline"
-            >
-              + 項目を追加(割引はマイナス金額で入力)
-            </button>
+            <div className="flex flex-wrap gap-4">
+              <button
+                type="button"
+                onClick={addItem}
+                className="text-sm text-blue-600 hover:underline"
+              >
+                + 項目を追加(定額の割引はマイナス金額で入力)
+              </button>
+              <button
+                type="button"
+                onClick={addPercentDiscount}
+                className="text-sm text-blue-600 hover:underline"
+              >
+                + 割引(％)を追加
+              </button>
+            </div>
           </div>
 
           <p className="text-right font-semibold">合計: ¥{total.toLocaleString("ja-JP")}</p>
@@ -184,6 +288,33 @@ function InvoicesView() {
             請求書を作成
           </button>
         </form>
+      </section>
+
+      <section className="mb-6 rounded-lg border bg-gray-50 p-4">
+        <h2 className="mb-1 font-semibold">毎月の請求をまとめて</h2>
+        <p className="mb-3 text-sm text-gray-500">
+          月謝を登録済みの在籍生徒へ、当月分の請求書をワンクリックで一括作成できます。
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="month"
+            className="rounded border px-3 py-2 text-sm"
+            value={yearMonth}
+            onChange={(e) => setYearMonth(e.target.value)}
+          />
+          <button
+            onClick={createBulk}
+            className="rounded bg-black px-3 py-2 text-sm text-white"
+          >
+            当月分を一括作成
+          </button>
+          <button
+            onClick={remindAllUnpaid}
+            className="rounded border px-3 py-2 text-sm hover:bg-gray-100"
+          >
+            未入金をまとめて督促(LINE)
+          </button>
+        </div>
       </section>
 
       <section>
@@ -207,7 +338,17 @@ function InvoicesView() {
                   <td className="py-2">{inv.year_month}</td>
                   <td className="py-2">{inv.student_name}</td>
                   <td className="py-2">¥{inv.total.toLocaleString("ja-JP")}</td>
-                  <td className="py-2">{inv.paid_status}</td>
+                  <td className="py-2">
+                    {inv.paid_status === "入金済" ? (
+                      inv.paid_status
+                    ) : inv.payment_reported_at ? (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
+                        入金確認待ち
+                      </span>
+                    ) : (
+                      inv.paid_status
+                    )}
+                  </td>
                   <td className="py-2">{inv.sent_at ? "送信済み" : "未送信"}</td>
                   <td className="py-2">
                     <div className="flex flex-wrap gap-1">
@@ -227,10 +368,18 @@ function InvoicesView() {
                       )}
                       {inv.paid_status !== "入金済" && (
                         <button
+                          onClick={() => remindInvoice(inv.id)}
+                          className="rounded border px-2 py-1 text-xs hover:bg-gray-50"
+                        >
+                          督促
+                        </button>
+                      )}
+                      {inv.paid_status !== "入金済" && (
+                        <button
                           onClick={() => markPaid(inv.id)}
                           className="rounded bg-black px-2 py-1 text-xs text-white"
                         >
-                          入金済みにする
+                          {inv.payment_reported_at ? "入金を確認" : "入金済みにする"}
                         </button>
                       )}
                     </div>

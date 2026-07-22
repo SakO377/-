@@ -6,7 +6,7 @@ export const LINE_FREE_PUSH_QUOTA = 200;
 export type StaffRole = "owner" | "admin" | "staff";
 export type StudentStatus = "在籍" | "休会" | "退会";
 export type AttendanceType = "check_in" | "check_out";
-export type AbsenceStatus = "申請" | "振替提案" | "確定";
+export type AbsenceStatus = "申請" | "振替提案" | "確定" | "欠席のみ";
 export type PaidStatus = "未入金" | "入金済" | "一部入金";
 export type LineMessageType = "push" | "reply" | "multicast";
 
@@ -31,6 +31,9 @@ export interface ClassEntity {
 export interface Student {
   id: string;
   name: string;
+  last_name: string | null;
+  first_name: string | null;
+  name_kana: string | null;
   grade: string | null;
   course: string | null;
   class_id: string | null;
@@ -38,6 +41,8 @@ export interface Student {
   tags: string[];
   metadata: Record<string, unknown>;
   monthly_fee: number | null;
+  enrolled_at: string | null;
+  withdrawn_at: string | null;
   created_at: string;
 }
 

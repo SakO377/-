@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useLiff } from "@/lib/useLiff";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, ApiError } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
+import NotLinkedNotice from "@/components/NotLinkedNotice";
 
 interface AnnouncementRow {
   id: string;
@@ -12,10 +13,17 @@ interface AnnouncementRow {
   read_at: string | null;
 }
 
-function AnnouncementsContent() {
+export default function AnnouncementsContent({
+  onBack,
+  onGoToLink,
+}: {
+  onBack: () => void;
+  onGoToLink: () => void;
+}) {
   const { status, error: liffError, liff } = useLiff();
   const [announcements, setAnnouncements] = useState<AnnouncementRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [notLinked, setNotLinked] = useState(false);
 
   const authHeader = useCallback((): Record<string, string> => {
     const idToken = liff.getIDToken();
@@ -29,6 +37,10 @@ function AnnouncementsContent() {
       });
       setAnnouncements(res.announcements);
     } catch (err) {
+      if (err instanceof ApiError && (err.status === 404 || err.status === 401)) {
+        setNotLinked(true);
+        return;
+      }
       setError(err instanceof Error ? err.message : "読み込みに失敗しました");
     }
   }, [authHeader]);
@@ -44,10 +56,18 @@ function AnnouncementsContent() {
 
   if (status === "initializing") return <p className="text-center text-gray-500">読み込み中...</p>;
   if (status === "error") return <p className="text-center text-red-600">{liffError}</p>;
+  if (notLinked) {
+    return (
+      <div>
+        <PageHeader title="お知らせ" onBack={onBack} />
+        <NotLinkedNotice onGoToLink={onGoToLink} />
+      </div>
+    );
+  }
 
   return (
     <div>
-      <PageHeader title="お知らせ" />
+      <PageHeader title="お知らせ" onBack={onBack} />
       {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
       {announcements.length === 0 && <p className="text-sm text-gray-500">お知らせはまだありません。</p>}
       <ul className="flex flex-col gap-3">
@@ -64,13 +84,5 @@ function AnnouncementsContent() {
         ))}
       </ul>
     </div>
-  );
-}
-
-export default function AnnouncementsPage() {
-  return (
-    <main className="mx-auto min-h-screen max-w-md p-6">
-      <AnnouncementsContent />
-    </main>
   );
 }

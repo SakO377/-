@@ -5,12 +5,17 @@ import type { Env, Variables } from "../types";
 import { requireAuth } from "../middleware/auth";
 import { generateId, generateInviteCode, generateQrToken } from "../lib/id";
 import { parseJsonArray, parseJsonObject } from "../lib/json";
+import { promoteGrades } from "../lib/grade-promotion";
+import { parseCsv } from "../lib/csv";
 
 const students = new Hono<{ Bindings: Env; Variables: Variables }>();
 students.use("*", requireAuth);
 
 const studentInput = z.object({
   name: z.string().min(1),
+  last_name: z.string().nullable().optional(),
+  first_name: z.string().nullable().optional(),
+  name_kana: z.string().nullable().optional(),
   grade: z.string().nullable().optional(),
   course: z.string().nullable().optional(),
   class_id: z.string().nullable().optional(),
@@ -18,6 +23,8 @@ const studentInput = z.object({
   tags: z.array(z.string()).optional(),
   metadata: z.record(z.unknown()).optional(),
   monthly_fee: z.number().int().nonnegative().nullable().optional(),
+  enrolled_at: z.string().nullable().optional(),
+  withdrawn_at: z.string().nullable().optional(),
 });
 
 // D1の行(rawなJSON文字列カラムを含む)をAPIレスポンス用に整形する
@@ -45,7 +52,8 @@ students.get("/", async (c) => {
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   // qr_token は入退室QRの秘密情報なので一覧では返さない
   const { results } = await c.env.DB.prepare(
-    `SELECT id, name, grade, course, class_id, status, tags, metadata, monthly_fee, created_at
+    `SELECT id, name, last_name, first_name, name_kana, grade, course, class_id, status, tags, metadata, monthly_fee,
+            enrolled_at, withdrawn_at, created_at
      FROM students ${where} ORDER BY created_at DESC`
   )
     .bind(...params)
@@ -56,30 +64,37 @@ students.get("/", async (c) => {
 // 生徒名簿のCSVエクスポート(/:id より先に登録してルート衝突を避ける)
 students.get("/export.csv", async (c) => {
   const { results } = await c.env.DB.prepare(
-    `SELECT s.name, s.grade, s.course, c.name AS class_name, s.status, s.tags, s.monthly_fee, s.created_at
+    `SELECT s.name, s.name_kana, s.grade, s.course, c.name AS class_name, s.status, s.tags, s.monthly_fee,
+            s.enrolled_at, s.withdrawn_at, s.created_at
      FROM students s LEFT JOIN classes c ON c.id = s.class_id
      ORDER BY s.created_at`
   ).all<{
     name: string;
+    name_kana: string | null;
     grade: string | null;
     course: string | null;
     class_name: string | null;
     status: string;
     tags: string | null;
     monthly_fee: number | null;
+    enrolled_at: string | null;
+    withdrawn_at: string | null;
     created_at: string;
   }>();
 
-  const header = "氏名,学年,コース,クラス,ステータス,タグ,月謝,登録日";
+  const header = "氏名,ふりがな,学年,コース,クラス,ステータス,タグ,月謝,入会日,退会日,登録日";
   const rows = (results ?? []).map((r) =>
     [
       r.name,
+      r.name_kana ?? "",
       r.grade ?? "",
       r.course ?? "",
       r.class_name ?? "",
       r.status,
       parseJsonArray(r.tags).join("|"),
       r.monthly_fee ?? "",
+      r.enrolled_at ?? "",
+      r.withdrawn_at ?? "",
       r.created_at,
     ]
       .map((v) => `"${String(v).replace(/"/g, '""')}"`)
@@ -92,17 +107,109 @@ students.get("/export.csv", async (c) => {
   });
 });
 
+// CSVで生徒名簿を一括取り込みする。列は export.csv と同じ見出し
+// (氏名/学年/コース/クラス/ステータス/タグ/月謝)を想定し、見出し名で対応付ける。
+// 「氏名」だけ必須。クラスは既存クラス名と一致すれば紐付け、なければ未設定にする。
+students.post("/import.csv", async (c) => {
+  const text = await c.req.text();
+  const rows = parseCsv(text);
+  if (rows.length < 2) {
+    return c.json({ error: "データ行がありません(1行目は見出し)" }, 400);
+  }
+
+  const header = rows[0].map((h) => h.trim());
+  const idx = (name: string) => header.indexOf(name);
+  const iName = idx("氏名");
+  if (iName < 0) {
+    return c.json({ error: "見出しに「氏名」列が必要です" }, 400);
+  }
+  const iKana = idx("ふりがな");
+  const iGrade = idx("学年");
+  const iCourse = idx("コース");
+  const iClass = idx("クラス");
+  const iStatus = idx("ステータス");
+  const iTags = idx("タグ");
+  const iFee = idx("月謝");
+
+  const { results: classRows } = await c.env.DB.prepare("SELECT id, name FROM classes").all<{
+    id: string;
+    name: string;
+  }>();
+  const classByName = new Map((classRows ?? []).map((r) => [r.name, r.id]));
+  const validStatus = new Set(["在籍", "休会", "退会"]);
+
+  let created = 0;
+  const errors: { row: number; reason: string }[] = [];
+  const statements = [];
+
+  for (let r = 1; r < rows.length; r++) {
+    const cols = rows[r];
+    const name = (cols[iName] ?? "").trim();
+    if (!name) {
+      errors.push({ row: r + 1, reason: "氏名が空です" });
+      continue;
+    }
+    const nameKana = iKana >= 0 ? cols[iKana]?.trim() || null : null;
+    const grade = iGrade >= 0 ? cols[iGrade]?.trim() || null : null;
+    const course = iCourse >= 0 ? cols[iCourse]?.trim() || null : null;
+    const className = iClass >= 0 ? cols[iClass]?.trim() : "";
+    const classId = className ? classByName.get(className) ?? null : null;
+    const statusRaw = iStatus >= 0 ? cols[iStatus]?.trim() : "";
+    const status = validStatus.has(statusRaw) ? statusRaw : "在籍";
+    const tags =
+      iTags >= 0 && cols[iTags]
+        ? cols[iTags]
+            .split("|")
+            .map((t) => t.trim())
+            .filter(Boolean)
+        : [];
+    const feeRaw = iFee >= 0 ? cols[iFee]?.replace(/[^\d-]/g, "") : "";
+    const monthlyFee = feeRaw ? Number(feeRaw) : null;
+
+    statements.push(
+      c.env.DB.prepare(
+        `INSERT INTO students (id, name, name_kana, grade, course, class_id, status, tags, metadata, qr_token, monthly_fee)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, ?)`
+      ).bind(
+        generateId("student"),
+        name,
+        nameKana,
+        grade,
+        course,
+        classId,
+        status,
+        JSON.stringify(tags),
+        generateQrToken(),
+        monthlyFee
+      )
+    );
+    created++;
+  }
+
+  if (statements.length > 0) await c.env.DB.batch(statements);
+  return c.json({ created, errors });
+});
+
 students.post("/", zValidator("json", studentInput), async (c) => {
   const body = c.req.valid("json");
   const id = generateId("student");
   const qrToken = generateQrToken();
+  // 入会日は指定がなければ本日(日本時間)にする
+  const nowJst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const todayJst = `${nowJst.getUTCFullYear()}-${String(nowJst.getUTCMonth() + 1).padStart(
+    2,
+    "0"
+  )}-${String(nowJst.getUTCDate()).padStart(2, "0")}`;
   await c.env.DB.prepare(
-    `INSERT INTO students (id, name, grade, course, class_id, status, tags, metadata, qr_token, monthly_fee)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO students (id, name, last_name, first_name, name_kana, grade, course, class_id, status, tags, metadata, qr_token, monthly_fee, enrolled_at, withdrawn_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
       body.name,
+      body.last_name ?? null,
+      body.first_name ?? null,
+      body.name_kana ?? null,
       body.grade ?? null,
       body.course ?? null,
       body.class_id ?? null,
@@ -110,11 +217,20 @@ students.post("/", zValidator("json", studentInput), async (c) => {
       JSON.stringify(body.tags ?? []),
       JSON.stringify(body.metadata ?? {}),
       qrToken,
-      body.monthly_fee ?? null
+      body.monthly_fee ?? null,
+      body.enrolled_at ?? todayJst,
+      body.withdrawn_at ?? null
     )
     .run();
   const row = await c.env.DB.prepare("SELECT * FROM students WHERE id = ?").bind(id).first();
   return c.json(serializeStudentRow(row as Record<string, unknown>), 201);
+});
+
+// 全生徒の学年を手動で一括進級させる(年度替わりの手動実行・確認用)。
+// 自動進級(日本時間4月1日)とは別に、任意のタイミングで実行できる。
+students.post("/promote-grades", async (c) => {
+  const promoted = await promoteGrades(c.env);
+  return c.json({ promoted });
 });
 
 students.get("/:id", async (c) => {
@@ -138,7 +254,11 @@ students.get("/:id", async (c) => {
 students.patch("/:id", zValidator("json", studentInput.partial()), async (c) => {
   const id = c.req.param("id");
   const body = c.req.valid("json");
-  const existing = await c.env.DB.prepare("SELECT id FROM students WHERE id = ?").bind(id).first();
+  const existing = await c.env.DB.prepare(
+    "SELECT id, status, withdrawn_at FROM students WHERE id = ?"
+  )
+    .bind(id)
+    .first<{ id: string; status: string; withdrawn_at: string | null }>();
   if (!existing) return c.json({ error: "Not found" }, 404);
 
   const fields: string[] = [];
@@ -146,6 +266,18 @@ students.patch("/:id", zValidator("json", studentInput.partial()), async (c) => 
   if (body.name !== undefined) {
     fields.push("name = ?");
     params.push(body.name);
+  }
+  if (body.last_name !== undefined) {
+    fields.push("last_name = ?");
+    params.push(body.last_name);
+  }
+  if (body.first_name !== undefined) {
+    fields.push("first_name = ?");
+    params.push(body.first_name);
+  }
+  if (body.name_kana !== undefined) {
+    fields.push("name_kana = ?");
+    params.push(body.name_kana);
   }
   if (body.grade !== undefined) {
     fields.push("grade = ?");
@@ -174,6 +306,23 @@ students.patch("/:id", zValidator("json", studentInput.partial()), async (c) => 
   if (body.monthly_fee !== undefined) {
     fields.push("monthly_fee = ?");
     params.push(body.monthly_fee);
+  }
+  if (body.enrolled_at !== undefined) {
+    fields.push("enrolled_at = ?");
+    params.push(body.enrolled_at);
+  }
+  if (body.withdrawn_at !== undefined) {
+    fields.push("withdrawn_at = ?");
+    params.push(body.withdrawn_at);
+  } else if (body.status === "退会" && existing.status !== "退会" && !existing.withdrawn_at) {
+    // 退会に変更され、退会日が未設定なら本日(日本時間)を自動で入れる
+    const nowJst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const todayJst = `${nowJst.getUTCFullYear()}-${String(nowJst.getUTCMonth() + 1).padStart(
+      2,
+      "0"
+    )}-${String(nowJst.getUTCDate()).padStart(2, "0")}`;
+    fields.push("withdrawn_at = ?");
+    params.push(todayJst);
   }
   if (fields.length > 0) {
     params.push(id);

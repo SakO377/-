@@ -73,6 +73,16 @@ function AnnouncementsView() {
     }
   }
 
+  async function cancelScheduled(id: string) {
+    if (!window.confirm("この予約配信を取り消しますか?")) return;
+    try {
+      await apiFetch(`/api/announcements/${id}`, { method: "DELETE" });
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "取り消しに失敗しました");
+    }
+  }
+
   function segmentLabel(segment: AnnouncementRow["segment"]) {
     if (segment.type === "all") return "全体";
     if (segment.type === "class") {
@@ -80,6 +90,17 @@ function AnnouncementsView() {
       return `クラス: ${cls?.name ?? segment.class_id}`;
     }
     return `タグ: ${segment.tag}`;
+  }
+
+  // 予約配信(未送信・予約日時あり)は配信予定順(早い順)に、それ以外は履歴として表示する
+  const scheduled = announcements
+    .filter((a) => !a.sent_at && a.scheduled_at)
+    .sort((x, y) => (x.scheduled_at ?? "").localeCompare(y.scheduled_at ?? ""));
+  const history = announcements.filter((a) => a.sent_at || !a.scheduled_at);
+
+  function formatDateTime(value: string) {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? value : d.toLocaleString("ja-JP");
   }
 
   return (
@@ -155,12 +176,50 @@ function AnnouncementsView() {
         </form>
       </section>
 
+      <section className="mb-8">
+        <h2 className="mb-2 font-semibold">配信予定(予約中)</h2>
+        {scheduled.length === 0 ? (
+          <p className="text-sm text-gray-500">予約中のお知らせはありません。</p>
+        ) : (
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b text-left text-gray-500">
+                <th className="py-2">配信予定日時</th>
+                <th className="py-2">タイトル</th>
+                <th className="py-2">配信対象</th>
+                <th className="py-2">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {scheduled.map((a, i) => (
+                <tr key={a.id} className="border-b">
+                  <td className="py-2">
+                    <span className="mr-1 text-gray-400">{i + 1}.</span>
+                    {a.scheduled_at ? formatDateTime(a.scheduled_at) : "-"}
+                  </td>
+                  <td className="py-2">{a.title}</td>
+                  <td className="py-2">{segmentLabel(a.segment)}</td>
+                  <td className="py-2">
+                    <button
+                      onClick={() => cancelScheduled(a.id)}
+                      className="rounded border px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                    >
+                      取り消す
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
       <section>
         <h2 className="mb-2 font-semibold">配信履歴</h2>
-        {announcements.length === 0 && (
-          <p className="text-sm text-gray-500">まだお知らせがありません。</p>
+        {history.length === 0 && (
+          <p className="text-sm text-gray-500">まだ配信したお知らせはありません。</p>
         )}
-        {announcements.length > 0 && (
+        {history.length > 0 && (
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b text-left text-gray-500">
@@ -170,16 +229,12 @@ function AnnouncementsView() {
               </tr>
             </thead>
             <tbody>
-              {announcements.map((a) => (
+              {history.map((a) => (
                 <tr key={a.id} className="border-b">
                   <td className="py-2">{a.title}</td>
                   <td className="py-2">{segmentLabel(a.segment)}</td>
                   <td className="py-2">
-                    {a.sent_at
-                      ? `送信済み(${a.sent_at})`
-                      : a.scheduled_at
-                        ? `予約中(${a.scheduled_at})`
-                        : "未送信"}
+                    {a.sent_at ? `送信済み(${formatDateTime(a.sent_at)})` : "未送信"}
                   </td>
                 </tr>
               ))}

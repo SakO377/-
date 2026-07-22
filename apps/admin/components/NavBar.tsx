@@ -22,7 +22,11 @@ const links: { href: string; label: string; badge?: keyof BadgeMap }[] = [
   { href: "/reports", label: "指導報告書", badge: "reports" },
   { href: "/announcements", label: "お知らせ" },
   { href: "/invoices", label: "請求", badge: "invoices" },
+  { href: "/trials", label: "体験予約" },
+  { href: "/referrals", label: "紹介" },
   { href: "/staff", label: "スタッフ" },
+  { href: "/settings", label: "設定" },
+  { href: "/audit", label: "操作ログ" },
 ];
 
 type BadgeMap = { absences: number; reports: number; invoices: number };

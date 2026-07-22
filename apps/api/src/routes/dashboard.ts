@@ -29,9 +29,11 @@ dashboard.get("/", async (c) => {
          FROM attendance_logs WHERE date(timestamp) = date('now')`
       )
       .first<{ check_in: number | null; check_out: number | null }>(),
-    db.prepare("SELECT COUNT(*) AS count FROM absence_requests WHERE status != '確定'").first<{
-      count: number;
-    }>(),
+    db
+      .prepare("SELECT COUNT(*) AS count FROM absence_requests WHERE status IN ('申請', '振替提案')")
+      .first<{
+        count: number;
+      }>(),
     db.prepare("SELECT COUNT(*) AS count FROM reports WHERE sent_at IS NULL").first<{
       count: number;
     }>(),
@@ -65,6 +67,103 @@ dashboard.get("/", async (c) => {
     },
     line_quota: { used, quota, remaining: Math.max(quota - used, 0) },
   });
+});
+
+// 直近nか月の「請求額(予定)」と「入金額(実績)」の推移。
+// 予定=その月に発行した請求書の合計、実績=そのうち入金済みの合計。
+// projected_monthly は在籍生徒の月謝合計(今後の毎月の見込み額)。
+dashboard.get("/revenue", async (c) => {
+  const db = c.env.DB;
+  const months = Math.min(Math.max(Number(c.req.query("months") ?? "6"), 1), 24);
+
+  const projected = await db
+    .prepare("SELECT COALESCE(SUM(monthly_fee), 0) AS total FROM students WHERE status = '在籍'")
+    .first<{ total: number }>();
+
+  // 対象の年月リスト(古い順)を日本時間基準で生成する
+  const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const yearMonths: string[] = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    yearMonths.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`);
+  }
+
+  const { results } = await db
+    .prepare(
+      `SELECT year_month,
+              COALESCE(SUM(total), 0) AS invoiced,
+              COALESCE(SUM(CASE WHEN paid_status = '入金済' THEN total ELSE 0 END), 0) AS paid
+       FROM invoices
+       WHERE year_month >= ?
+       GROUP BY year_month`
+    )
+    .bind(yearMonths[0])
+    .all<{ year_month: string; invoiced: number; paid: number }>();
+
+  const byMonth = new Map((results ?? []).map((r) => [r.year_month, r]));
+  const series = yearMonths.map((ym) => {
+    const row = byMonth.get(ym);
+    const invoiced = row?.invoiced ?? 0;
+    const paid = row?.paid ?? 0;
+    return { year_month: ym, invoiced, paid, difference: invoiced - paid };
+  });
+
+  return c.json({ projected_monthly: projected?.total ?? 0, months: series });
+});
+
+// 今月まだ指導報告書を作成していない在籍生徒(定期報告の抜け漏れ防止)。
+dashboard.get("/reports-missing", async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT s.id, s.name, s.grade FROM students s
+     WHERE s.status = '在籍'
+       AND NOT EXISTS (
+         SELECT 1 FROM reports r
+         WHERE r.student_id = s.id
+           AND strftime('%Y-%m', r.created_at) = strftime('%Y-%m', 'now', '+9 hours')
+       )
+     ORDER BY s.created_at`
+  ).all<{ id: string; name: string; grade: string | null }>();
+  return c.json({ students: results ?? [], count: (results ?? []).length });
+});
+
+// 離脱リスクのある在籍生徒を検知する(継続率アラート)。
+// ・長期未出席: 直近 absenceDays 日間に入室記録がない
+// ・未入金滞留: 未入金/一部入金の請求書が unpaidDays 日以上前から残っている
+// いずれも既存データのみで判定するため追加コストなし。
+dashboard.get("/at-risk", async (c) => {
+  const db = c.env.DB;
+  const unpaidDays = 30;
+
+  // 未入金/一部入金の請求書が unpaidDays 日以上前から残っている在籍生徒のみを対象にする。
+  const { results } = await db
+    .prepare(
+      `SELECT s.id, s.name, s.grade,
+              (SELECT COUNT(*) FROM invoices i
+                 WHERE i.student_id = s.id AND i.paid_status != '入金済'
+                   AND i.created_at <= datetime('now', ?)) AS overdue_unpaid
+       FROM students s
+       WHERE s.status = '在籍'
+       ORDER BY s.created_at`
+    )
+    .bind(`-${unpaidDays} days`)
+    .all<{
+      id: string;
+      name: string;
+      grade: string | null;
+      overdue_unpaid: number;
+    }>();
+
+  const atRisk = (results ?? [])
+    .filter((s) => s.overdue_unpaid > 0)
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      grade: s.grade,
+      reasons: [`未入金 ${s.overdue_unpaid} 件(${unpaidDays}日以上)`],
+      overdue_unpaid: s.overdue_unpaid,
+    }));
+
+  return c.json({ at_risk: atRisk, criteria: { unpaid_days: unpaidDays } });
 });
 
 export default dashboard;

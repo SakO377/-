@@ -2,7 +2,10 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { Env, Variables } from "./types";
 import setup from "./routes/setup";
+import auth from "./routes/auth";
+import audit from "./routes/audit";
 import demo from "./routes/demo";
+import { generateId } from "./lib/id";
 import dashboard from "./routes/dashboard";
 import staffRoutes from "./routes/staff";
 import students from "./routes/students";
@@ -15,6 +18,11 @@ import reportTemplates from "./routes/report-templates";
 import reports from "./routes/reports";
 import announcements, { sendAnnouncementNow } from "./routes/announcements";
 import invoices from "./routes/invoices";
+import trials from "./routes/trials";
+import grades from "./routes/grades";
+import shifts from "./routes/shifts";
+import referrals from "./routes/referrals";
+import { promoteGradesIfDue } from "./lib/grade-promotion";
 import lineWebhook from "./routes/line-webhook";
 import liff from "./routes/liff";
 import kiosk from "./routes/kiosk";
@@ -35,6 +43,43 @@ app.use("*", async (c, next) => {
   return handler(c, next);
 });
 
+// アクセス元制限: ADMIN_IP_ALLOWLIST が設定されている場合、許可IP以外からの
+// 管理API(/api/*)を拒否する。体験用デモ(/api/demo)は誰でも触れるよう対象外。
+app.use("/api/*", async (c, next) => {
+  const allowlist = (c.env.ADMIN_IP_ALLOWLIST ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (allowlist.length === 0) return next();
+  if (c.req.path.startsWith("/api/demo")) return next();
+  const ip = c.req.header("CF-Connecting-IP") ?? "";
+  if (!allowlist.includes(ip)) {
+    return c.json({ error: "この場所からのアクセスは許可されていません" }, 403);
+  }
+  return next();
+});
+
+// 操作ログ(監査ログ): 認証済みの更新系リクエスト(GET以外)を記録する。
+// requireAuth が staff をセットした後に走らせたいので、next() の後で判定する。
+app.use("/api/*", async (c, next) => {
+  await next();
+  const method = c.req.method;
+  if (method === "GET" || method === "OPTIONS") return;
+  const staff = c.get("staff");
+  if (!staff) return; // 未認証(デモ・ログイン等)は記録しない
+  if (c.res.status >= 400) return;
+  try {
+    const path = new URL(c.req.url).pathname;
+    await c.env.DB.prepare(
+      "INSERT INTO audit_logs (id, staff_id, staff_name, method, path, status) VALUES (?, ?, ?, ?, ?, ?)"
+    )
+      .bind(generateId("audit"), staff.id, staff.name, method, path, c.res.status)
+      .run();
+  } catch (e) {
+    console.error("audit log failed", e);
+  }
+});
+
 app.get("/", (c) =>
   c.json({
     name: "School Harness API",
@@ -53,8 +98,12 @@ app.get("/health", async (c) => {
 // 体験用デモ環境の初期化(DEMO_MODE=true のときのみ有効、APIキー不要)
 app.route("/api/demo", demo);
 
+// 名前+パスワードのログイン(APIキー取得)
+app.route("/api/auth", auth);
+
 // 管理画面向けAPI(要 X-API-Key)
 app.route("/api/setup", setup);
+app.route("/api/audit", audit);
 app.route("/api/dashboard", dashboard);
 app.route("/api/staff", staffRoutes);
 app.route("/api/students", students);
@@ -67,6 +116,10 @@ app.route("/api/report-templates", reportTemplates);
 app.route("/api/reports", reports);
 app.route("/api/announcements", announcements);
 app.route("/api/invoices", invoices);
+app.route("/api/trials", trials);
+app.route("/api/grades", grades);
+app.route("/api/shifts", shifts);
+app.route("/api/referrals", referrals);
 
 // LINE Messaging API Webhook(署名検証あり、APIキー不要)
 app.route("/line", lineWebhook);
@@ -88,6 +141,14 @@ async function scheduled(_event: ScheduledController, env: Env): Promise<void> {
 
   for (const row of results ?? []) {
     await sendAnnouncementNow(env, row);
+  }
+
+  // 年に一度(日本時間4月1日)、在籍生徒の学年を自動で1つ上げる。
+  // 進級処理の失敗が配信処理に影響しないよう、独立して try/catch する。
+  try {
+    await promoteGradesIfDue(env);
+  } catch (err) {
+    console.error("grade promotion failed", err);
   }
 }
 

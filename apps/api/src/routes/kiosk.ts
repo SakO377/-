@@ -38,7 +38,11 @@ kiosk.post(
     let sent = 0;
     if (pushEnabled) {
       const label = type === "check_in" ? "入室" : "退室";
-      const time = new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+      // Workers はUTCで動くため、日本時間(UTC+9)に補正して時刻を出す
+      const jst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+      const time = `${String(jst.getUTCHours()).padStart(2, "0")}:${String(
+        jst.getUTCMinutes()
+      ).padStart(2, "0")}`;
       const result = await notifyGuardiansOfStudent(c.env, student.id, "attendance", () => [
         { type: "text", text: `${student.name}さんが${label}しました。(${time})` },
       ]);

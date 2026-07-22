@@ -12,6 +12,12 @@ dist
 .env.local
 .dev.vars
 
+# 顧客ごとの設定(example.json 以外は各自の環境情報。誤コミット防止のため除外)
+tenants/*.json
+!tenants/example.json
+# デプロイスクリプトが生成する一時的な wrangler 設定
+apps/api/.tenant.*.toml
+
 *.tsbuildinfo
 
 # misc

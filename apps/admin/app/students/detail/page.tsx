@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState, useCallback } from "react";
+import { Suspense, useEffect, useState, useCallback, type KeyboardEvent, type FormEvent } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import AuthGuard from "@/components/AuthGuard";
@@ -8,15 +8,40 @@ import NavBar from "@/components/NavBar";
 import { apiFetch } from "@/lib/api";
 import type { StudentStatus } from "@school-harness/shared";
 
+const GRADE_PRESETS = [
+  "年少",
+  "年中",
+  "年長",
+  "小1",
+  "小2",
+  "小3",
+  "小4",
+  "小5",
+  "小6",
+  "中1",
+  "中2",
+  "中3",
+  "高1",
+  "高2",
+  "高3",
+];
+const GRADE_CUSTOM = "__custom__";
+
 interface StudentDetail {
   id: string;
   name: string;
+  last_name: string | null;
+  first_name: string | null;
+  name_kana: string | null;
   grade: string | null;
   course: string | null;
+  class_id: string | null;
   status: StudentStatus;
   tags: string[];
   qr_token: string | null;
   monthly_fee: number | null;
+  enrolled_at: string | null;
+  withdrawn_at: string | null;
   guardians: {
     id: string;
     name: string | null;
@@ -28,6 +53,16 @@ interface StudentDetail {
 interface InviteCodeResult {
   code: string;
   expires_at: string;
+}
+
+interface GradeRow {
+  id: string;
+  subject: string | null;
+  exam_name: string;
+  date: string | null;
+  score: number | null;
+  max_score: number | null;
+  note: string | null;
 }
 
 const STATUSES: StudentStatus[] = ["在籍", "休会", "退会"];
@@ -234,6 +269,126 @@ function HistoryTabs({ studentId }: { studentId: string }) {
   );
 }
 
+function GradesSection({ studentId }: { studentId: string }) {
+  const [grades, setGrades] = useState<GradeRow[] | null>(null);
+  const [form, setForm] = useState({ exam_name: "", subject: "", date: "", score: "", max_score: "" });
+
+  const loadGrades = useCallback(() => {
+    apiFetch<{ grades: GradeRow[] }>(`/api/grades?student_id=${encodeURIComponent(studentId)}`).then(
+      (res) => setGrades(res.grades)
+    );
+  }, [studentId]);
+
+  useEffect(() => {
+    loadGrades();
+  }, [loadGrades]);
+
+  async function addGrade(e: FormEvent) {
+    e.preventDefault();
+    await apiFetch("/api/grades", {
+      method: "POST",
+      body: JSON.stringify({
+        student_id: studentId,
+        exam_name: form.exam_name,
+        subject: form.subject || null,
+        date: form.date || null,
+        score: form.score === "" ? null : Number(form.score),
+        max_score: form.max_score === "" ? null : Number(form.max_score),
+      }),
+    });
+    setForm({ exam_name: "", subject: "", date: "", score: "", max_score: "" });
+    loadGrades();
+  }
+
+  async function deleteGrade(id: string) {
+    await apiFetch(`/api/grades/${id}`, { method: "DELETE" });
+    loadGrades();
+  }
+
+  return (
+    <section className="mb-6">
+      <h2 className="mb-2 font-semibold">成績</h2>
+      <form onSubmit={addGrade} className="mb-3 flex flex-wrap gap-2">
+        <input
+          className="rounded border px-2 py-1 text-sm"
+          placeholder="テスト名(例: 中間テスト)"
+          value={form.exam_name}
+          onChange={(e) => setForm({ ...form, exam_name: e.target.value })}
+          required
+        />
+        <input
+          className="w-24 rounded border px-2 py-1 text-sm"
+          placeholder="教科"
+          value={form.subject}
+          onChange={(e) => setForm({ ...form, subject: e.target.value })}
+        />
+        <input
+          type="date"
+          className="rounded border px-2 py-1 text-sm"
+          value={form.date}
+          onChange={(e) => setForm({ ...form, date: e.target.value })}
+        />
+        <input
+          type="number"
+          className="w-20 rounded border px-2 py-1 text-sm"
+          placeholder="点数"
+          value={form.score}
+          onChange={(e) => setForm({ ...form, score: e.target.value })}
+        />
+        <span className="self-center text-sm text-gray-400">/</span>
+        <input
+          type="number"
+          className="w-20 rounded border px-2 py-1 text-sm"
+          placeholder="満点"
+          value={form.max_score}
+          onChange={(e) => setForm({ ...form, max_score: e.target.value })}
+        />
+        <button type="submit" className="rounded border px-3 py-1 text-sm hover:bg-gray-50">
+          記録
+        </button>
+      </form>
+      {grades === null ? (
+        <p className="text-sm text-gray-500">読み込み中...</p>
+      ) : grades.length === 0 ? (
+        <p className="text-sm text-gray-500">まだ成績の記録はありません。</p>
+      ) : (
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b text-left text-gray-500">
+              <th className="py-1.5">日付</th>
+              <th className="py-1.5">テスト</th>
+              <th className="py-1.5">教科</th>
+              <th className="py-1.5">点数</th>
+              <th className="py-1.5"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {grades.map((g) => (
+              <tr key={g.id} className="border-b">
+                <td className="py-1.5">{g.date ?? "-"}</td>
+                <td className="py-1.5">{g.exam_name}</td>
+                <td className="py-1.5">{g.subject ?? "-"}</td>
+                <td className="py-1.5">
+                  {g.score != null ? g.score : "-"}
+                  {g.max_score != null ? ` / ${g.max_score}` : ""}
+                </td>
+                <td className="py-1.5 text-right">
+                  <button
+                    onClick={() => deleteGrade(g.id)}
+                    className="text-xs text-red-600 hover:underline"
+                  >
+                    削除
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
 function StudentDetailView() {
   const searchParams = useSearchParams();
   const studentId = searchParams.get("id") ?? "";
@@ -243,16 +398,52 @@ function StudentDetailView() {
   const [invite, setInvite] = useState<InviteCodeResult | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [monthlyFeeInput, setMonthlyFeeInput] = useState("");
+  const [basicForm, setBasicForm] = useState({
+    lastName: "",
+    firstName: "",
+    nameKana: "",
+    grade: "",
+    course: "",
+    class_id: "",
+    enrolled_at: "",
+    withdrawn_at: "",
+  });
+  const [gradeMode, setGradeMode] = useState<"preset" | typeof GRADE_CUSTOM>("preset");
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
+  const [basicSaved, setBasicSaved] = useState(false);
+  const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
 
   const load = useCallback(async () => {
     try {
       const res = await apiFetch<StudentDetail>(`/api/students/${studentId}`);
       setStudent(res);
       setMonthlyFeeInput(res.monthly_fee != null ? String(res.monthly_fee) : "");
+      setBasicForm({
+        // 姓・名が未設定の既存生徒は、表示名(name)を姓に入れておく(編集で分けられる)
+        lastName: res.last_name ?? res.name ?? "",
+        firstName: res.first_name ?? "",
+        nameKana: res.name_kana ?? "",
+        grade: res.grade ?? "",
+        course: res.course ?? "",
+        class_id: res.class_id ?? "",
+        enrolled_at: res.enrolled_at ?? "",
+        withdrawn_at: res.withdrawn_at ?? "",
+      });
+      setGradeMode(
+        res.grade && !GRADE_PRESETS.includes(res.grade) ? GRADE_CUSTOM : "preset"
+      );
+      setTags(res.tags);
     } catch (err) {
       setError(err instanceof Error ? err.message : "読み込みに失敗しました");
     }
   }, [studentId]);
+
+  useEffect(() => {
+    apiFetch<{ classes: { id: string; name: string }[] }>("/api/classes")
+      .then((res) => setClasses(res.classes))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     load();
@@ -300,6 +491,58 @@ function StudentDetailView() {
     setStudent({ ...student, monthly_fee: res.monthly_fee });
   }
 
+  function addTag() {
+    const value = tagInput.trim();
+    if (!value || tags.includes(value)) {
+      setTagInput("");
+      return;
+    }
+    setTags([...tags, value]);
+    setTagInput("");
+  }
+
+  function handleTagKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addTag();
+    }
+  }
+
+  async function saveBasic() {
+    if (!student) return;
+    setBasicSaved(false);
+    const fullName = `${basicForm.lastName.trim()} ${basicForm.firstName.trim()}`.trim();
+    const res = await apiFetch<StudentDetail>(`/api/students/${student.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        name: fullName,
+        last_name: basicForm.lastName.trim() || null,
+        first_name: basicForm.firstName.trim() || null,
+        name_kana: basicForm.nameKana.trim() || null,
+        grade: basicForm.grade || null,
+        course: basicForm.course || null,
+        class_id: basicForm.class_id || null,
+        enrolled_at: basicForm.enrolled_at || null,
+        withdrawn_at: basicForm.withdrawn_at || null,
+        tags,
+      }),
+    });
+    setStudent({
+      ...student,
+      name: res.name,
+      last_name: res.last_name,
+      first_name: res.first_name,
+      name_kana: res.name_kana,
+      grade: res.grade,
+      course: res.course,
+      class_id: res.class_id,
+      enrolled_at: res.enrolled_at,
+      withdrawn_at: res.withdrawn_at,
+      tags: res.tags,
+    });
+    setBasicSaved(true);
+  }
+
   async function regenerateQr() {
     if (!student) return;
     if (
@@ -322,6 +565,171 @@ function StudentDetailView() {
       <p className="mb-4 text-sm text-gray-500">
         {student.grade ?? "-"} / {student.course ?? "-"}
       </p>
+
+      <section className="mb-6">
+        <h2 className="mb-2 font-semibold">基本情報</h2>
+        <div className="flex flex-col gap-3 rounded-lg border p-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-sm text-gray-600">氏名(姓 / 名)</label>
+            <div className="flex gap-2">
+              <input
+                className="flex-1 rounded border px-3 py-2"
+                placeholder="姓"
+                value={basicForm.lastName}
+                onChange={(e) => setBasicForm({ ...basicForm, lastName: e.target.value })}
+              />
+              <input
+                className="flex-1 rounded border px-3 py-2"
+                placeholder="名"
+                value={basicForm.firstName}
+                onChange={(e) => setBasicForm({ ...basicForm, firstName: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-sm text-gray-600">ふりがな</label>
+            <input
+              className="rounded border px-3 py-2"
+              placeholder="ひらがな(例: やまだ たろう)"
+              value={basicForm.nameKana}
+              onChange={(e) => setBasicForm({ ...basicForm, nameKana: e.target.value })}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-sm text-gray-600">学年</label>
+            <select
+              className="rounded border px-3 py-2"
+              value={gradeMode === GRADE_CUSTOM ? GRADE_CUSTOM : basicForm.grade}
+              onChange={(e) => {
+                if (e.target.value === GRADE_CUSTOM) {
+                  setGradeMode(GRADE_CUSTOM);
+                  setBasicForm({ ...basicForm, grade: "" });
+                } else {
+                  setGradeMode("preset");
+                  setBasicForm({ ...basicForm, grade: e.target.value });
+                }
+              }}
+            >
+              <option value="">選択してください</option>
+              {GRADE_PRESETS.map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+              <option value={GRADE_CUSTOM}>その他(自由入力)</option>
+            </select>
+            {gradeMode === GRADE_CUSTOM && (
+              <input
+                className="rounded border px-3 py-2"
+                placeholder="学年を入力(例: 高卒認定クラス)"
+                value={basicForm.grade}
+                onChange={(e) => setBasicForm({ ...basicForm, grade: e.target.value })}
+              />
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-sm text-gray-600">コース</label>
+            <input
+              className="rounded border px-3 py-2"
+              value={basicForm.course}
+              onChange={(e) => setBasicForm({ ...basicForm, course: e.target.value })}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-sm text-gray-600">所属クラス</label>
+            <select
+              className="rounded border px-3 py-2"
+              value={basicForm.class_id}
+              onChange={(e) => setBasicForm({ ...basicForm, class_id: e.target.value })}
+            >
+              <option value="">未所属</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex gap-3">
+            <div className="flex flex-1 flex-col gap-1">
+              <label className="text-sm text-gray-600">入会日</label>
+              <input
+                type="date"
+                className="rounded border px-3 py-2"
+                value={basicForm.enrolled_at}
+                onChange={(e) => setBasicForm({ ...basicForm, enrolled_at: e.target.value })}
+              />
+            </div>
+            <div className="flex flex-1 flex-col gap-1">
+              <label className="text-sm text-gray-600">退会日</label>
+              <input
+                type="date"
+                className="rounded border px-3 py-2"
+                value={basicForm.withdrawn_at}
+                onChange={(e) => setBasicForm({ ...basicForm, withdrawn_at: e.target.value })}
+              />
+              <p className="text-xs text-gray-500">
+                ステータスを「退会」にすると自動で入ります(手動でも変更可)。
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-sm text-gray-600">タグ</label>
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="flex items-center gap-1 rounded-full bg-gray-100 px-2 py-1 text-xs"
+                  >
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={() => setTags(tags.filter((t) => t !== tag))}
+                      className="text-gray-500 hover:text-red-600"
+                      aria-label={`${tag}を削除`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <input
+                className="flex-1 rounded border px-3 py-2 text-sm"
+                placeholder="タグを入力してEnter(例: 兄弟在籍、体験)"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={handleTagKeyDown}
+              />
+              <button
+                type="button"
+                onClick={addTag}
+                className="rounded border px-3 py-2 text-sm hover:bg-gray-50"
+              >
+                追加
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={saveBasic}
+              className="self-start rounded bg-black px-4 py-2 text-sm text-white"
+            >
+              基本情報を保存
+            </button>
+            {basicSaved && <span className="text-sm text-green-600">保存しました</span>}
+          </div>
+        </div>
+      </section>
 
       <section className="mb-6">
         <h2 className="mb-2 font-semibold">ステータス</h2>
@@ -416,6 +824,8 @@ function StudentDetailView() {
           印刷してカードにし、教室のQRリーダー画面(<code>/kiosk</code>)で読み取ってもらってください。
         </p>
       </section>
+
+      <GradesSection studentId={student.id} />
 
       <HistoryTabs studentId={student.id} />
 

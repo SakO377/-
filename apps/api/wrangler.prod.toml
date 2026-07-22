@@ -1,0 +1,30 @@
+name = "school-harness-api-prod"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+# 本番用(実際の教室運営)。デモとは別のD1・別のWorkerとして稼働する。
+[[d1_databases]]
+binding = "DB"
+database_name = "school-harness-prod"
+database_id = "7084cd0f-0f3f-4650-8fa3-d54a1357c63a"
+migrations_dir = "migrations"
+
+[vars]
+LINE_FREE_PUSH_QUOTA = "200"
+# LINE Login (LIFF) チャネルID。LIFFのIDトークン検証(audience)に使用する。
+# LINE Developers で LINEログインチャネルを作成し、そのチャネルIDに置き換える。
+LIFF_CHANNEL_ID = "2010677068"
+# CORSで許可するオリジン。本番管理画面・LIFFのURLに絞る。
+ALLOWED_ORIGINS = "https://school-harness-prod-admin.pages.dev,https://school-harness-prod-liff.pages.dev"
+# 本番では必ず "false"(見本データ投入エンドポイントを無効化)。
+DEMO_MODE = "false"
+# 管理APIへのアクセス元IP制限(カンマ区切り)。空なら制限なし。
+ADMIN_IP_ALLOWLIST = ""
+
+# LINE_CHANNEL_ACCESS_TOKEN / LINE_CHANNEL_SECRET は
+# `wrangler secret put ... --config wrangler.prod.toml` で設定する(平文で書かない)。
+
+# お知らせの予約配信を5分おきにチェックして送信する
+[triggers]
+crons = ["*/5 * * * *"]

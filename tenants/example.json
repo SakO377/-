@@ -1,0 +1,22 @@
+{
+  "id": "example",
+  "classroom_name": "サンプル教室",
+  "contact": "example@example.com",
+  "cf": {
+    "worker_name": "sh-example-api",
+    "d1_name": "sh-example",
+    "d1_id": "REPLACE_WITH_D1_DATABASE_ID",
+    "admin_project": "sh-example-admin",
+    "liff_project": "sh-example-liff"
+  },
+  "urls": {
+    "api": "https://sh-example-api.YOUR_SUBDOMAIN.workers.dev",
+    "admin": "https://sh-example-admin.pages.dev",
+    "liff_direct": "https://sh-example-liff.pages.dev"
+  },
+  "line": {
+    "liff_id": "0000000000-xxxxxxxx",
+    "login_channel_id": "0000000000"
+  },
+  "note": "この example.json をコピーして tenants/<教室ID>.json を作り、値を実際のものに置き換えてください。LINEのアクセストークン等のシークレットはここには書かず、wrangler secret で設定します。"
+}
